@@ -50,7 +50,7 @@ function normalizePem(pemRaw) {
         const footer = footerMatch[0];
 
         let body = pem.replace(header, "").replace(footer, "").replace(/\s+/g, "");
-        body = body.match(/.{1,64}/g) ? .join("\n") ? ? body;
+        body = body.match(/.{1,64}/g) ? body.match(/.{1,64}/g).join("\n") : body;
 
         pem = `${header}\n${body}\n${footer}\n`;
     }
@@ -126,7 +126,7 @@ function parseLabels(defaultLabelsCsv, payloadLabels) {
  * payload.captured_at can be ISO string; if missing, use now.
  */
 function getDateKeyJst(payload) {
-    const captured = payload ? .captured_at ? new Date(payload.captured_at) : new Date();
+    const captured = payload ? payload.captured_at ? new Date(payload.captured_at) : new Date() : new Date();
     // Convert to JST date key
     const jstMs = captured.getTime() + 9 * 60 * 60 * 1000;
     const d = new Date(jstMs);
@@ -137,13 +137,13 @@ function getDateKeyJst(payload) {
 }
 
 function formatEntry(payload) {
-    const captured = payload ? .captured_at ? new Date(payload.captured_at) : new Date();
+    const captured = payload ? payload.captured_at ? new Date(payload.captured_at) : new Date() : new Date();
     const jst = new Date(captured.getTime() + 9 * 60 * 60 * 1000);
     const hh = String(jst.getUTCHours()).padStart(2, "0");
     const mi = String(jst.getUTCMinutes()).padStart(2, "0");
 
-    const raw = (payload ? .raw ? ? "").toString().trim();
-    const kind = (payload ? .kind ? ? "").toString().trim(); // optional
+    const raw = (payload ? payload.raw ? payload.raw : "" : "").toString().trim();
+    const kind = (payload ? payload.kind ? payload.kind : "" : "").toString().trim(); // optional
     const prefix = kind ? `**[${kind}]** ` : "";
 
     // コメントはMarkdownで：時刻見出し + 本文
@@ -172,7 +172,7 @@ async function claimIdempotency(requestId, payloadHash) {
         }));
         return { enabled: true, claimed: true };
     } catch (e) {
-        if (e.code !== "ConditionalCheckFailedException") throw e;
+        if (e.name !== "ConditionalCheckFailedException") throw e;
 
         const existing = await ddb.send(new GetCommand({
             TableName: table,
@@ -228,7 +228,7 @@ async function markIdempotencyFailed(requestId, errMsg) {
     if (!table) return;
 
     try {
-        await ddb.update({
+        await ddb.send(new UpdateCommand({
             TableName: table,
             Key: { request_id: requestId },
             UpdateExpression: "SET #s = :fail, error = :err",
@@ -237,8 +237,22 @@ async function markIdempotencyFailed(requestId, errMsg) {
                 ":fail": "failed",
                 ":err": String(errMsg).slice(0, 900),
             },
-        }).promise();
+        }));
     } catch {}
+}
+
+async function getIssueComments({ token, owner, repo, issueNumber }) {
+    const comments = [];
+    let page = 1;
+    while (true) {
+        const url = `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}/comments?per_page=100&page=${page}`;
+        const batch = await githubRequest(url, { token });
+        if (!batch || batch.length === 0) break;
+        comments.push(...batch);
+        if (batch.length < 100) break;
+        page++;
+    }
+    return comments;
 }
 
 async function findDailyIssue({ token, owner, repo, dateKey, labels }) {
@@ -259,7 +273,7 @@ async function findDailyIssue({ token, owner, repo, dateKey, labels }) {
     const url = `https://api.github.com/search/issues?q=${encodeURIComponent(q)}&per_page=5`;
     const result = await githubRequest(url, { token });
 
-    const items = result ? .items || [];
+    const items = result ? result.items || [] : [];
     // Exact title match only
     const exact = items.find((it) => (it.title || "").trim() === dateKey);
     return exact || null;
@@ -287,6 +301,37 @@ async function addComment({ token, owner, repo, issueNumber, commentBody }) {
 }
 
 export const handler = async(event) => {
+    const method = (event.requestContext && event.requestContext.http && event.requestContext.http.method) || event.httpMethod || "POST";
+    const rawPath = event.rawPath || event.path || "";
+
+    // GET /log/yyyy-mm-dd
+    const dateMatch = rawPath.match(/\/log\/(\d{4}-\d{2}-\d{2})$/);
+    if (method === "GET" && dateMatch) {
+        const dateKey = dateMatch[1];
+        const owner = process.env.GITHUB_OWNER;
+        const repo = process.env.GITHUB_REPO;
+        if (!owner || !repo) {
+            return { statusCode: 500, body: JSON.stringify({ ok: false, error: "missing_repo_env" }) };
+        }
+        try {
+            const installationToken = await getInstallationToken();
+            const labels = parseLabels(process.env.DEFAULT_LABELS || "thoughtlog", []);
+            const issue = await findDailyIssue({ token: installationToken, owner, repo, dateKey, labels });
+            if (!issue) {
+                return { statusCode: 404, body: JSON.stringify({ ok: false, error: "not_found", date: dateKey }) };
+            }
+            const comments = await getIssueComments({ token: installationToken, owner, repo, issueNumber: issue.number });
+            const body = comments.map((c) => c.body || "").join("\n");
+            return {
+                statusCode: 200,
+                headers: { "Content-Type": "text/plain; charset=utf-8" },
+                body,
+            };
+        } catch (e) {
+            return { statusCode: 500, body: JSON.stringify({ ok: false, error: e.message }) };
+        }
+    }
+
     // Robust payload read
     let payload = {};
     try {
