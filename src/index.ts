@@ -354,6 +354,17 @@ async function addComment({ token, owner, repo, issueNumber, commentBody }: { to
     return comment;
 }
 
+async function updateAndCloseIssue({ token, owner, repo, issueNumber, body }: { token: string; owner: string; repo: string; issueNumber: number; body: string }): Promise<GitHubIssue> {
+    const issue = await githubRequest(
+        `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`, {
+            method: "PATCH",
+            token,
+            body: { body, state: "closed" },
+        }
+    ) as GitHubIssue;
+    return issue;
+}
+
 export const handler = async (event: APIGatewayProxyEventV2 | APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const method = ("requestContext" in event && "http" in event.requestContext
         ? (event.requestContext as { http: { method: string } }).http.method
@@ -382,6 +393,32 @@ export const handler = async (event: APIGatewayProxyEventV2 | APIGatewayProxyEve
                 statusCode: 200,
                 headers: { "Content-Type": "text/plain; charset=utf-8" },
                 body,
+            };
+        } catch (e) {
+            return { statusCode: 500, body: JSON.stringify({ ok: false, error: (e as Error).message }) };
+        }
+    }
+
+    // PUT /log/yyyy-mm-dd
+    if (method === "PUT" && dateMatch) {
+        const dateKey = dateMatch[1];
+        const owner = process.env.GITHUB_OWNER;
+        const repo = process.env.GITHUB_REPO;
+        if (!owner || !repo) {
+            return { statusCode: 500, body: JSON.stringify({ ok: false, error: "missing_repo_env" }) };
+        }
+        const newBody = typeof event.body === "string" ? event.body : "";
+        try {
+            const installationToken = await getInstallationToken();
+            const labels = parseLabels(process.env.DEFAULT_LABELS || "thoughtlog", []);
+            const issue = await findDailyIssue({ token: installationToken, owner, repo, dateKey, labels });
+            if (!issue) {
+                return { statusCode: 404, body: JSON.stringify({ ok: false, error: "not_found", date: dateKey }) };
+            }
+            const updated = await updateAndCloseIssue({ token: installationToken, owner, repo, issueNumber: issue.number, body: newBody });
+            return {
+                statusCode: 200,
+                body: JSON.stringify({ ok: true, date: dateKey, issue_number: updated.number, issue_url: updated.html_url }),
             };
         } catch (e) {
             return { statusCode: 500, body: JSON.stringify({ ok: false, error: (e as Error).message }) };
