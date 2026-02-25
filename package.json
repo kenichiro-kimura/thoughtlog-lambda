@@ -7,7 +7,6 @@
     "test": "vitest run --passWithNoTests",
     "lint": "eslint src"
   },
-  "type": "module",
   "keywords": [],
   "author": "",
   "license": "ISC",
