@@ -292,7 +292,7 @@ async function markIdempotencyFailed(requestId: string, errMsg: string): Promise
                 ":err": String(errMsg).slice(0, 900),
             },
         }));
-    } catch {}
+    } catch {} // eslint-disable-line no-empty
 }
 
 async function getIssueComments({ token, owner, repo, issueNumber }: { token: string; owner: string; repo: string; issueNumber: number }): Promise<GitHubComment[]> {
