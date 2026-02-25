@@ -354,12 +354,23 @@ async function addComment({ token, owner, repo, issueNumber, commentBody }: { to
     return comment;
 }
 
-async function updateAndCloseIssue({ token, owner, repo, issueNumber, body }: { token: string; owner: string; repo: string; issueNumber: number; body: string }): Promise<GitHubIssue> {
+async function updateIssue({ token, owner, repo, issueNumber, body }: { token: string; owner: string; repo: string; issueNumber: number; body: string }): Promise<GitHubIssue> {
     const issue = await githubRequest(
         `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`, {
             method: "PATCH",
             token,
-            body: { body, state: "closed" },
+            body: { body },
+        }
+    ) as GitHubIssue;
+    return issue;
+}
+
+async function closeIssue({ token, owner, repo, issueNumber }: { token: string; owner: string; repo: string; issueNumber: number }): Promise<GitHubIssue> {
+    const issue = await githubRequest(
+        `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`, {
+            method: "PATCH",
+            token,
+            body: { state: "closed" },
         }
     ) as GitHubIssue;
     return issue;
@@ -407,7 +418,18 @@ export const handler = async (event: APIGatewayProxyEventV2 | APIGatewayProxyEve
         if (!owner || !repo) {
             return { statusCode: 500, body: JSON.stringify({ ok: false, error: "missing_repo_env" }) };
         }
-        const newBody = typeof event.body === "string" ? event.body : "";
+        const rawBody = typeof event.body === "string" ? event.body : "";
+        const decodedBody = event.isBase64Encoded ? Buffer.from(rawBody, "base64").toString("utf8") : rawBody;
+        let putPayload: { raw?: string } = {};
+        try {
+            putPayload = decodedBody ? JSON.parse(decodedBody) as { raw?: string } : {};
+        } catch (e) {
+            return { statusCode: 400, body: JSON.stringify({ ok: false, error: "invalid_json", detail: (e as Error).message }) };
+        }
+        const newBody = (putPayload.raw ?? "").toString().trim();
+        if (!newBody) {
+            return { statusCode: 400, body: JSON.stringify({ ok: false, error: "missing_body" }) };
+        }
         try {
             const installationToken = await getInstallationToken();
             const labels = parseLabels(process.env.DEFAULT_LABELS || "thoughtlog", []);
@@ -415,10 +437,11 @@ export const handler = async (event: APIGatewayProxyEventV2 | APIGatewayProxyEve
             if (!issue) {
                 return { statusCode: 404, body: JSON.stringify({ ok: false, error: "not_found", date: dateKey }) };
             }
-            const updated = await updateAndCloseIssue({ token: installationToken, owner, repo, issueNumber: issue.number, body: newBody });
+            await updateIssue({ token: installationToken, owner, repo, issueNumber: issue.number, body: newBody });
+            const closed = await closeIssue({ token: installationToken, owner, repo, issueNumber: issue.number });
             return {
                 statusCode: 200,
-                body: JSON.stringify({ ok: true, date: dateKey, issue_number: updated.number, issue_url: updated.html_url }),
+                body: JSON.stringify({ ok: true, date: dateKey, issue_number: closed.number, issue_url: closed.html_url }),
             };
         } catch (e) {
             return { statusCode: 500, body: JSON.stringify({ ok: false, error: (e as Error).message }) };
