@@ -1,17 +1,17 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import type { Payload } from "./types";
 import { createThoughtLogService } from "./container";
+import { LambdaHttpRequest, HTTP_STATUS, buildJsonResult, buildTextResult } from "./adapters/lambdaAdapter";
 
 export const handler = async (event: APIGatewayProxyEventV2 | APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    const method = ("requestContext" in event && "http" in event.requestContext
-        ? (event.requestContext as { http: { method: string } }).http.method
-        : ("httpMethod" in event ? event.httpMethod : undefined)) || "POST";
-    const rawPath = ("rawPath" in event ? event.rawPath : undefined) || ("path" in event ? event.path : undefined) || "";
+    const request = new LambdaHttpRequest(event);
+    const method = request.getMethod();
+    const dateParam = request.getDateParam();
 
     const owner = process.env.GITHUB_OWNER;
     const repo = process.env.GITHUB_REPO;
     if (!owner || !repo) {
-        return { statusCode: 500, body: JSON.stringify({ ok: false, error: "missing_repo_env" }) };
+        return buildJsonResult(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: "missing_repo_env" });
     }
 
     const ttlEnv = process.env.IDEMPOTENCY_TTL_DAYS;
@@ -32,81 +32,68 @@ export const handler = async (event: APIGatewayProxyEventV2 | APIGatewayProxyEve
     });
 
     // GET /log/yyyy-mm-dd
-    const dateMatch = rawPath.match(/\/log\/(\d{4}-\d{2}-\d{2})$/);
-    if (method === "GET" && dateMatch) {
+    if (method === "GET" && dateParam) {
         try {
-            const outcome = await thoughtLog.getLog(dateMatch[1]);
+            const outcome = await thoughtLog.getLog(dateParam);
             if (outcome.kind === "not_found") {
-                return { statusCode: 404, body: JSON.stringify({ ok: false, error: "not_found", date: outcome.date }) };
+                return buildJsonResult(HTTP_STATUS.NOT_FOUND, { ok: false, error: "not_found", date: outcome.date });
             }
-            return {
-                statusCode: 200,
-                headers: { "Content-Type": "text/plain; charset=utf-8" },
-                body: outcome.body,
-            };
+            return buildTextResult(outcome.body);
         } catch (e) {
-            return { statusCode: 500, body: JSON.stringify({ ok: false, error: (e as Error).message }) };
+            return buildJsonResult(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: (e as Error).message });
         }
     }
 
     // PUT /log/yyyy-mm-dd
-    if (method === "PUT" && dateMatch) {
-        const rawBody = typeof event.body === "string" ? event.body : "";
-        const decodedBody = event.isBase64Encoded ? Buffer.from(rawBody, "base64").toString("utf8") : rawBody;
+    if (method === "PUT" && dateParam) {
+        const decodedBody = request.getRawBody();
         let putPayload: { raw?: string };
         try {
             putPayload = decodedBody ? JSON.parse(decodedBody) as { raw?: string } : {};
         } catch (e) {
-            return { statusCode: 400, body: JSON.stringify({ ok: false, error: "invalid_json", detail: (e as Error).message }) };
+            return buildJsonResult(HTTP_STATUS.BAD_REQUEST, { ok: false, error: "invalid_json", detail: (e as Error).message });
         }
         const newBody = (putPayload.raw ?? "").toString().trim();
         if (!newBody) {
-            return { statusCode: 400, body: JSON.stringify({ ok: false, error: "missing_body" }) };
+            return buildJsonResult(HTTP_STATUS.BAD_REQUEST, { ok: false, error: "missing_body" });
         }
         try {
-            const outcome = await thoughtLog.updateLog(dateMatch[1], newBody);
+            const outcome = await thoughtLog.updateLog(dateParam, newBody);
             if (outcome.kind === "not_found") {
-                return { statusCode: 404, body: JSON.stringify({ ok: false, error: "not_found", date: outcome.date }) };
+                return buildJsonResult(HTTP_STATUS.NOT_FOUND, { ok: false, error: "not_found", date: outcome.date });
             }
-            return {
-                statusCode: 200,
-                body: JSON.stringify({ ok: true, date: outcome.date, issue_number: outcome.issue_number, issue_url: outcome.issue_url }),
-            };
+            return buildJsonResult(HTTP_STATUS.OK, { ok: true, date: outcome.date, issue_number: outcome.issue_number, issue_url: outcome.issue_url });
         } catch (e) {
-            return { statusCode: 500, body: JSON.stringify({ ok: false, error: (e as Error).message }) };
+            return buildJsonResult(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: (e as Error).message });
         }
     }
 
     // POST /  – create a new log entry
-    let payload: Payload = {};
+    let payload: Payload;
     try {
-        if (typeof event.body === "string") payload = JSON.parse(event.body) as Payload;
-        else if (typeof event.body === "object" && event.body) payload = event.body as unknown as Payload;
+        payload = request.getPayload();
     } catch (e) {
-        return { statusCode: 400, body: JSON.stringify({ ok: false, error: "invalid_json", detail: (e as Error).message }) };
+        return buildJsonResult(HTTP_STATUS.BAD_REQUEST, { ok: false, error: "invalid_json", detail: (e as Error).message });
     }
 
     const requestId = (payload.request_id || "").toString().trim();
     if (!requestId) {
-        return { statusCode: 400, body: JSON.stringify({ ok: false, error: "missing_request_id" }) };
+        return buildJsonResult(HTTP_STATUS.BAD_REQUEST, { ok: false, error: "missing_request_id" });
     }
 
     try {
         const outcome = await thoughtLog.createEntry(payload);
         if (outcome.kind === "idempotent") {
-            return { statusCode: outcome.statusCode, body: JSON.stringify(outcome.body) };
+            return buildJsonResult(outcome.statusCode, outcome.body);
         }
-        return {
-            statusCode: 201,
-            body: JSON.stringify({
-                ok: true,
-                date: outcome.date,
-                issue_number: outcome.issue_number,
-                issue_url: outcome.issue_url,
-                comment_id: outcome.comment_id,
-            }),
-        };
+        return buildJsonResult(HTTP_STATUS.CREATED, {
+            ok: true,
+            date: outcome.date,
+            issue_number: outcome.issue_number,
+            issue_url: outcome.issue_url,
+            comment_id: outcome.comment_id,
+        });
     } catch (e) {
-        return { statusCode: 500, body: JSON.stringify({ ok: false, error: (e as Error).message }) };
+        return buildJsonResult(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: (e as Error).message });
     }
 };
