@@ -28,4 +28,29 @@ describe("SecretsManagerSecretProvider", () => {
         const provider = new SecretsManagerSecretProvider(SECRET_ARN, client);
         await expect(provider.getPrivateKeyPem()).rejects.toThrow(SECRET_ARN);
     });
+
+    it("returns cached value without calling Secrets Manager again within TTL", async () => {
+        const client = makeMockClient(PEM);
+        const provider = new SecretsManagerSecretProvider(SECRET_ARN, client, 60_000);
+
+        const first = await provider.getPrivateKeyPem();
+        const second = await provider.getPrivateKeyPem();
+
+        expect(first).toBe(PEM);
+        expect(second).toBe(PEM);
+        expect(client.send).toHaveBeenCalledOnce();
+    });
+
+    it("refreshes the cache after TTL expires", async () => {
+        vi.useFakeTimers();
+        const client = makeMockClient(PEM);
+        const provider = new SecretsManagerSecretProvider(SECRET_ARN, client, 1_000);
+
+        await provider.getPrivateKeyPem();
+        vi.advanceTimersByTime(2_000);
+        await provider.getPrivateKeyPem();
+
+        expect(client.send).toHaveBeenCalledTimes(2);
+        vi.useRealTimers();
+    });
 });

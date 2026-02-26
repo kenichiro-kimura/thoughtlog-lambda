@@ -16,7 +16,7 @@ export class GitHubAuthService implements IAuthService {
 
     async getInstallationToken(): Promise<string> {
         if (!this.appId || !this.installationId) {
-            throw new Error("Missing env: GITHUB_APP_ID / GITHUB_INSTALLATION_ID / GITHUB_PRIVATE_KEY_SECRET_ARN");
+            throw new Error("Missing env: GITHUB_APP_ID / GITHUB_INSTALLATION_ID");
         }
         const privateKeyPem = normalizePem(await this.secretProvider.getPrivateKeyPem());
         if (!privateKeyPem) {
