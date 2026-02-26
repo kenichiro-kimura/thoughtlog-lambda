@@ -44,3 +44,12 @@ export interface GitHubComment {
 export interface GitHubSearchResult {
     items?: GitHubIssue[];
 }
+
+/** Framework-agnostic HTTP response returned by ThoughtLogRouter. */
+export interface HttpResponse {
+    statusCode: number;
+    /** MIME type for the Content-Type header; omitted for application/json responses. */
+    contentType?: string;
+    body: string;
+}
+

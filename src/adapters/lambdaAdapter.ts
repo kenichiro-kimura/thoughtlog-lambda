@@ -1,28 +1,14 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import type { Payload } from "../types";
+import type { Payload, HttpResponse } from "../types";
 import type { IHttpRequest } from "../interfaces/IHttpRequest";
 
-/** Named HTTP status code constants. */
-export const HTTP_STATUS = {
-    OK: 200,
-    CREATED: 201,
-    BAD_REQUEST: 400,
-    NOT_FOUND: 404,
-    INTERNAL_SERVER_ERROR: 500,
-} as const;
-
-/** Builds a JSON Lambda result with the given status code and body object. */
-export function buildJsonResult(statusCode: number, body: object): APIGatewayProxyResult {
-    return { statusCode, body: JSON.stringify(body) };
-}
-
-/** Builds a plain-text Lambda result with HTTP 200. */
-export function buildTextResult(body: string): APIGatewayProxyResult {
-    return {
-        statusCode: HTTP_STATUS.OK,
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-        body,
-    };
+/** Converts a framework-agnostic HttpResponse to an APIGateway Lambda result. */
+export function toLambdaResult(response: HttpResponse): APIGatewayProxyResult {
+    const result: APIGatewayProxyResult = { statusCode: response.statusCode, body: response.body };
+    if (response.contentType) {
+        result.headers = { "Content-Type": response.contentType };
+    }
+    return result;
 }
 
 /** Adapts an APIGateway event to the framework-agnostic IHttpRequest interface. */
@@ -70,3 +56,4 @@ export class LambdaHttpRequest implements IHttpRequest {
             : rawBody;
     }
 }
+
