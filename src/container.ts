@@ -4,6 +4,7 @@ import { githubRequest } from "./utils/http";
 import { GitHubAuthService } from "./services/authService";
 import { GitHubApiService } from "./services/githubService";
 import { DynamoDBIdempotencyService } from "./services/idempotencyService";
+import { SecretsManagerSecretProvider } from "./services/secretProvider";
 import { ThoughtLogService } from "./services/thoughtLogService";
 import type { ThoughtLogConfig } from "./services/thoughtLogService";
 
@@ -15,7 +16,7 @@ const ddb = DynamoDBDocumentClient.from(
 export interface ContainerEnv extends ThoughtLogConfig {
     githubAppId: string | undefined;
     githubInstallationId: string | undefined;
-    githubPrivateKeyPem: string | undefined;
+    githubPrivateKeySecretArn: string | undefined;
     idempotencyTable: string | undefined;
     idempotencyTtlDays: number | undefined;
 }
@@ -25,10 +26,14 @@ export interface ContainerEnv extends ThoughtLogConfig {
  * This is the single place where the dependency graph is assembled.
  */
 export function createThoughtLogService(env: ContainerEnv): ThoughtLogService {
+    if (!env.githubPrivateKeySecretArn) {
+        throw new Error("Missing env: GITHUB_PRIVATE_KEY_SECRET_ARN");
+    }
+    const secretProvider = new SecretsManagerSecretProvider(env.githubPrivateKeySecretArn);
     const auth = new GitHubAuthService(
         env.githubAppId,
         env.githubInstallationId,
-        env.githubPrivateKeyPem,
+        secretProvider,
         githubRequest,
     );
     const github = new GitHubApiService(githubRequest);
