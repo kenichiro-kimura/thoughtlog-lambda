@@ -15,7 +15,7 @@ export class ThoughtlogStack extends cdk.Stack {
 
     // DynamoDB table for idempotency
     const table = new dynamodb.Table(this, 'IdempotencyTable', {
-      tableName: 'thoughtlog-idempotency',
+
       partitionKey: {
         name: 'request_id',
         type: dynamodb.AttributeType.STRING,
@@ -28,6 +28,11 @@ export class ThoughtlogStack extends cdk.Stack {
     // Lambda function (Node.js 24, 1 minute timeout)
     const repoRoot = path.join(__dirname, '../..');
     const fn = new lambda.Function(this, 'ThoughtlogFunction', {
+      // NOTE: The function name is intentionally hardcoded to match the CD workflow's
+      // LAMBDA_FUNCTION_NAME secret. This stack is intended for a single deployment
+      // per account/region. If you need multiple environments (dev/staging/prod) in
+      // the same account/region, update this to use a dynamic name (e.g., include
+      // the stack name or environment) and adjust the CD workflow accordingly.
       functionName: 'thoughtlog',
       runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'dist/index.handler',
@@ -39,9 +44,10 @@ export class ThoughtlogStack extends cdk.Stack {
             [
               'npm ci',
               'npm run build',
-              'npm prune --omit=dev',
               'cp -r dist /asset-output/',
-              'cp -r node_modules /asset-output/',
+              'cp package.json package-lock.json /asset-output/',
+              'cd /asset-output',
+              'npm ci --omit=dev',
             ].join(' && '),
           ],
           local: {
@@ -77,29 +83,37 @@ export class ThoughtlogStack extends cdk.Stack {
     table.grantReadWriteData(fn);
 
     // EntraID JWT authorizer configuration from CDK context
-    const entraIssuer = this.node.tryGetContext('entraIssuer') as string;
-    const entraAudience = this.node.tryGetContext('entraAudience') as string;
+    const entraIssuer = this.node.tryGetContext('entraIssuer') as string | undefined;
+    const entraAudience = this.node.tryGetContext('entraAudience') as string | undefined;
 
-    if (!entraIssuer || !entraAudience) {
-      throw new Error(
-        'CDK context variables "entraIssuer" and "entraAudience" must be set.\n' +
-        'Example: cdk deploy -c entraIssuer="https://login.microsoftonline.com/TENANT_ID/v2.0" -c entraAudience="CLIENT_ID"'
+    // Treat missing or placeholder values as "no real Entra configuration"
+    const hasRealEntraConfig =
+      !!entraIssuer &&
+      !!entraAudience &&
+      !entraIssuer.includes('TENANT_ID') &&
+      entraAudience !== 'CLIENT_ID';
+
+    if (!hasRealEntraConfig) {
+      // Allow synthesis without real Entra values; API will be created without a default JWT authorizer.
+      // For production, provide real values via context, for example:
+      //   cdk deploy -c entraIssuer="https://login.microsoftonline.com/<tenant-id>/v2.0" -c entraAudience="<client-id>"
+      console.warn(
+        'EntraID context variables "entraIssuer" and "entraAudience" are not set to real values. ' +
+        'The HTTP API will be synthesized without a default JWT authorizer.'
       );
     }
 
-    const authorizer = new apigwv2Auth.HttpJwtAuthorizer(
-      'EntraAuthorizer',
-      entraIssuer,
-      {
-        jwtAudience: [entraAudience],
-      }
-    );
+    const authorizer = hasRealEntraConfig
+      ? new apigwv2Auth.HttpJwtAuthorizer('EntraAuthorizer', entraIssuer as string, {
+          jwtAudience: [entraAudience as string],
+        })
+      : undefined;
 
     const integration = new apigwv2Int.HttpLambdaIntegration('ThoughtlogIntegration', fn);
 
-    // HTTP API Gateway with default JWT authorizer
+    // HTTP API Gateway with optional default JWT authorizer
     const api = new apigwv2.HttpApi(this, 'ThoughtlogApi', {
-      apiName: 'thoughtlog-api',
+
       description: 'Thoughtlog HTTP API',
       defaultAuthorizer: authorizer,
       defaultIntegration: integration,
