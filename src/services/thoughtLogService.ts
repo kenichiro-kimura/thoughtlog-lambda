@@ -47,7 +47,7 @@ export class ThoughtLogService {
         }
 
         const dateKey = getDateKeyJst(payload);
-        const labels = parseLabels(this.config.defaultLabels, payload.labels ?? []);
+        const labels = parseLabels(this.config.defaultLabels, payload.labels);
         const entry = formatEntry(payload);
 
         const payloadHash = crypto

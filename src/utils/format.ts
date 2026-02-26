@@ -1,7 +1,7 @@
 import type { Payload } from "../types";
 import { JST_OFFSET_MS } from "./date";
 
-export function parseLabels(defaultLabelsCsv: string, payloadLabels: unknown[]): string[] {
+export function parseLabels(defaultLabelsCsv: string, payloadLabels: unknown): string[] {
     const base = (defaultLabelsCsv || "")
         .split(",")
         .map((s) => s.trim())

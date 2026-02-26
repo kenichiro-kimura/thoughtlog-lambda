@@ -21,6 +21,13 @@ describe("parseLabels", () => {
     it("returns only payload labels when default is empty", () => {
         expect(parseLabels("", ["baz"])).toEqual(["baz"]);
     });
+
+    it("returns only default labels when payload labels is not an array", () => {
+        expect(parseLabels("foo", null)).toEqual(["foo"]);
+        expect(parseLabels("foo", "bar")).toEqual(["foo"]);
+        expect(parseLabels("foo", undefined)).toEqual(["foo"]);
+    });
+
 });
 
 describe("formatEntry", () => {
