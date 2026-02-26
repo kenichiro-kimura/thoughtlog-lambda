@@ -39,10 +39,13 @@ export class LambdaHttpRequest implements IHttpRequest {
     }
 
     getPayload(): Payload {
-        const { event } = this;
-        if (typeof event.body === "string") {
-            return JSON.parse(event.body) as Payload;
+        const rawBody = this.getRawBody();
+
+        if (rawBody) {
+            return JSON.parse(rawBody) as Payload;
         }
+
+        const { event } = this;
         if (typeof event.body === "object" && event.body) {
             return event.body as unknown as Payload;
         }
