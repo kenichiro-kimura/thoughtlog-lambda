@@ -1,5 +1,6 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { githubRequest } from "./utils/http";
 import { GitHubAuthService } from "./services/authService";
 import { GitHubApiService } from "./services/githubService";
@@ -8,10 +9,11 @@ import { SecretsManagerSecretProvider } from "./services/secretProvider";
 import { ThoughtLogService } from "./services/thoughtLogService";
 import type { ThoughtLogConfig } from "./services/thoughtLogService";
 
-// DynamoDB client is created once at module load to reuse connections across invocations.
+// Clients are created once at module load to reuse connections across invocations.
 const ddb = DynamoDBDocumentClient.from(
     new DynamoDBClient({}), { marshallOptions: { removeUndefinedValues: true } },
 );
+const secretsClient = new SecretsManagerClient({});
 
 export interface ContainerEnv extends ThoughtLogConfig {
     githubAppId: string | undefined;
@@ -29,7 +31,7 @@ export function createThoughtLogService(env: ContainerEnv): ThoughtLogService {
     if (!env.githubPrivateKeySecretArn) {
         throw new Error("Missing env: GITHUB_PRIVATE_KEY_SECRET_ARN");
     }
-    const secretProvider = new SecretsManagerSecretProvider(env.githubPrivateKeySecretArn);
+    const secretProvider = new SecretsManagerSecretProvider(env.githubPrivateKeySecretArn, secretsClient);
     const auth = new GitHubAuthService(
         env.githubAppId,
         env.githubInstallationId,
