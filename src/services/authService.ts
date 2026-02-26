@@ -1,6 +1,7 @@
 import { signJwtRS256, normalizePem } from "../utils/jwt";
 import type { HttpClient } from "../utils/http";
 import type { IAuthService } from "../interfaces/IAuthService";
+import type { ISecretProvider } from "../interfaces/ISecretProvider";
 
 export type { IAuthService };
 
@@ -9,14 +10,17 @@ export class GitHubAuthService implements IAuthService {
     constructor(
         private readonly appId: string | undefined,
         private readonly installationId: string | undefined,
-        private readonly privateKeyPemRaw: string | undefined,
+        private readonly secretProvider: ISecretProvider,
         private readonly httpClient: HttpClient,
     ) {}
 
     async getInstallationToken(): Promise<string> {
-        const privateKeyPem = normalizePem(this.privateKeyPemRaw);
-        if (!this.appId || !this.installationId || !privateKeyPem) {
-            throw new Error("Missing env: GITHUB_APP_ID / GITHUB_INSTALLATION_ID / GITHUB_PRIVATE_KEY_PEM");
+        if (!this.appId || !this.installationId) {
+            throw new Error("Missing env: GITHUB_APP_ID / GITHUB_INSTALLATION_ID");
+        }
+        const privateKeyPem = normalizePem(await this.secretProvider.getPrivateKeyPem());
+        if (!privateKeyPem) {
+            throw new Error("Private key PEM retrieved from Secrets Manager is empty or invalid");
         }
 
         const now = Math.floor(Date.now() / 1000);

@@ -93,14 +93,14 @@ export class ThoughtlogStack extends cdk.Stack {
     // Grant Lambda read/write access to DynamoDB
     table.grantReadWriteData(fn);
 
-    // GITHUB_PRIVATE_KEY_PEM: retrieved from Secrets Manager at deploy time.
+    // GITHUB_PRIVATE_KEY_SECRET_ARN: the Lambda reads the private key from Secrets Manager at runtime.
     // Provide the secret ARN via CDK context: -c githubPrivateKeySecretArn="arn:aws:secretsmanager:..."
     const privateKeySecretArn = this.node.tryGetContext('githubPrivateKeySecretArn') as string | undefined;
     if (privateKeySecretArn) {
       const privateKeySecret = secretsmanager.Secret.fromSecretPartialArn(
         this, 'GithubPrivateKeySecret', privateKeySecretArn
       );
-      fn.addEnvironment('GITHUB_PRIVATE_KEY_PEM', privateKeySecret.secretValue.unsafeUnwrap());
+      fn.addEnvironment('GITHUB_PRIVATE_KEY_SECRET_ARN', privateKeySecretArn);
       privateKeySecret.grantRead(fn);
     }
 

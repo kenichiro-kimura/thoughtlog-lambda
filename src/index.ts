@@ -23,7 +23,7 @@ export const handler = async (event: APIGatewayProxyEventV2 | APIGatewayProxyEve
         defaultLabels: process.env.DEFAULT_LABELS || "thoughtlog",
         githubAppId: process.env.GITHUB_APP_ID,
         githubInstallationId: process.env.GITHUB_INSTALLATION_ID,
-        githubPrivateKeyPem: process.env.GITHUB_PRIVATE_KEY_PEM,
+        githubPrivateKeySecretArn: process.env.GITHUB_PRIVATE_KEY_SECRET_ARN,
         idempotencyTable: process.env.IDEMPOTENCY_TABLE,
         idempotencyTtlDays,
     });
