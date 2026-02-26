@@ -4,6 +4,7 @@ import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigwv2Auth from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as apigwv2Int from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import * as fs from 'fs';
@@ -76,11 +77,32 @@ export class ThoughtlogStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(1),
       environment: {
         IDEMPOTENCY_TABLE: table.tableName,
+        GITHUB_OWNER: (this.node.tryGetContext('githubOwner') ?? '') as string,
+        GITHUB_REPO: (this.node.tryGetContext('githubRepo') ?? '') as string,
+        GITHUB_APP_ID: (this.node.tryGetContext('githubAppId') ?? '') as string,
+        GITHUB_INSTALLATION_ID: (this.node.tryGetContext('githubInstallationId') ?? '') as string,
+        ...(this.node.tryGetContext('defaultLabels')
+          ? { DEFAULT_LABELS: this.node.tryGetContext('defaultLabels') as string }
+          : {}),
+        ...(this.node.tryGetContext('idempotencyTtlDays')
+          ? { IDEMPOTENCY_TTL_DAYS: this.node.tryGetContext('idempotencyTtlDays') as string }
+          : {}),
       },
     });
 
     // Grant Lambda read/write access to DynamoDB
     table.grantReadWriteData(fn);
+
+    // GITHUB_PRIVATE_KEY_PEM: retrieved from Secrets Manager at deploy time.
+    // Provide the secret ARN via CDK context: -c githubPrivateKeySecretArn="arn:aws:secretsmanager:..."
+    const privateKeySecretArn = this.node.tryGetContext('githubPrivateKeySecretArn') as string | undefined;
+    if (privateKeySecretArn) {
+      const privateKeySecret = secretsmanager.Secret.fromSecretPartialArn(
+        this, 'GithubPrivateKeySecret', privateKeySecretArn
+      );
+      fn.addEnvironment('GITHUB_PRIVATE_KEY_PEM', privateKeySecret.secretValue.unsafeUnwrap());
+      privateKeySecret.grantRead(fn);
+    }
 
     // EntraID JWT authorizer configuration from CDK context
     const entraIssuer = this.node.tryGetContext('entraIssuer') as string | undefined;
