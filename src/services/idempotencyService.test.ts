@@ -152,15 +152,19 @@ describe("DynamoDBIdempotencyService.markFailed", () => {
 
 describe("DynamoDBIdempotencyService – custom TTL", () => {
     it("uses the specified ttlDays when constructing the item", async () => {
-        const send = vi.fn().mockResolvedValue({});
-        const svc = new DynamoDBIdempotencyService(makeDdb(send as SendFn), "my-table", 30);
-        await svc.claim("r1", "hash");
-        const command = send.mock.calls[0][0];
-        const item = command.input.Item;
-        // ttl should be approximately now + 30 days
-        const expectedMin = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 - 5;
-        const expectedMax = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60 + 5;
-        expect(item.ttl).toBeGreaterThanOrEqual(expectedMin);
-        expect(item.ttl).toBeLessThanOrEqual(expectedMax);
+        const fixedNow = new Date("2024-06-01T00:00:00Z");
+        vi.useFakeTimers();
+        vi.setSystemTime(fixedNow);
+        try {
+            const send = vi.fn().mockResolvedValue({});
+            const svc = new DynamoDBIdempotencyService(makeDdb(send as SendFn), "my-table", 30);
+            await svc.claim("r1", "hash");
+            const command = send.mock.calls[0][0];
+            const item = command.input.Item;
+            const expectedTtl = Math.floor(fixedNow.getTime() / 1000) + 30 * 24 * 60 * 60;
+            expect(item.ttl).toBe(expectedTtl);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });
