@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ThoughtLogService } from "./thoughtLogService";
-import type { IAuthService } from "./authService";
-import type { IGitHubService } from "./githubService";
-import type { IIdempotencyService } from "./idempotencyService";
+import type { IAuthService } from "../interfaces/IAuthService";
+import type { IGitHubService } from "../interfaces/IGitHubService";
+import type { IIdempotencyService } from "../interfaces/IIdempotencyService";
 import type { GitHubIssue, GitHubComment } from "../types";
 
 // ── shared test doubles ────────────────────────────────────────────────────────
@@ -51,6 +51,13 @@ describe("ThoughtLogService.createEntry", () => {
         github = makeGitHub();
         idempotency = makeIdempotency();
         service = new ThoughtLogService(auth, github, idempotency, config);
+    });
+
+    it("throws when request_id is empty", async () => {
+        await expect(
+            service.createEntry({ raw: "hello" }),
+        ).rejects.toThrow("request_id must be a non-empty string");
+        expect(idempotency.claim).not.toHaveBeenCalled();
     });
 
     it("creates a new entry and returns created outcome", async () => {

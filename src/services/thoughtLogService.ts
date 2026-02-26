@@ -2,9 +2,9 @@ import crypto from "crypto";
 import type { Payload, GitHubIssue } from "../types";
 import { getDateKeyJst } from "../utils/date";
 import { parseLabels, formatEntry } from "../utils/format";
-import type { IAuthService } from "./authService";
-import type { IGitHubService } from "./githubService";
-import type { IIdempotencyService } from "./idempotencyService";
+import type { IAuthService } from "../interfaces/IAuthService";
+import type { IGitHubService } from "../interfaces/IGitHubService";
+import type { IIdempotencyService } from "../interfaces/IIdempotencyService";
 
 export interface ThoughtLogConfig {
     owner: string;
@@ -41,6 +41,11 @@ export class ThoughtLogService {
     async createEntry(payload: Payload): Promise<CreateEntryOutcome> {
         const { owner, repo } = this.config;
 
+        const requestId = (payload.request_id || "").toString().trim();
+        if (!requestId) {
+            throw new Error("request_id must be a non-empty string");
+        }
+
         const dateKey = getDateKeyJst(payload);
         const labels = parseLabels(this.config.defaultLabels, payload.labels ?? []);
         const entry = formatEntry(payload);
@@ -49,8 +54,6 @@ export class ThoughtLogService {
             .createHash("sha256")
             .update(JSON.stringify({ dateKey, entry, labels }))
             .digest("hex");
-
-        const requestId = (payload.request_id || "").toString().trim();
 
         const idem = await this.idempotency.claim(requestId, payloadHash);
         if (idem.enabled && !idem.claimed) {
@@ -63,7 +66,7 @@ export class ThoughtLogService {
             let issue: GitHubIssue | null = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
             if (!issue) {
                 issue = await this.github.createDailyIssue({ owner, repo, dateKey, labels, token });
-            } else if (issue.number && !issue.html_url) {
+            } else if (!issue.html_url) {
                 issue = await this.github.getIssue({ owner, repo, issueNumber: issue.number, token });
             }
 
@@ -73,7 +76,7 @@ export class ThoughtLogService {
 
             await this.idempotency.markDone(requestId, {
                 issue_number: issue.number,
-                issue_url: issue.html_url,
+                issue_url: issue.html_url!,
                 comment_id: comment.id,
             });
 
@@ -81,7 +84,7 @@ export class ThoughtLogService {
                 kind: "created",
                 date: dateKey,
                 issue_number: issue.number,
-                issue_url: issue.html_url,
+                issue_url: issue.html_url!,
                 comment_id: comment.id,
             };
         } catch (e) {
@@ -117,7 +120,7 @@ export class ThoughtLogService {
             kind: "updated",
             date: dateKey,
             issue_number: closed.number,
-            issue_url: closed.html_url,
+            issue_url: closed.html_url!,
         };
     }
 }

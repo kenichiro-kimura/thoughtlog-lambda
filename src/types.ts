@@ -32,7 +32,7 @@ export interface IdempotencyResult {
 
 export interface GitHubIssue {
     number: number;
-    html_url: string;
+    html_url?: string;
     title?: string;
 }
 

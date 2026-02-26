@@ -1,9 +1,8 @@
 import { signJwtRS256, normalizePem } from "../utils/jwt";
 import type { HttpClient } from "../utils/http";
+import type { IAuthService } from "../interfaces/IAuthService";
 
-export interface IAuthService {
-    getInstallationToken(): Promise<string>;
-}
+export type { IAuthService };
 
 /** GitHub App installation token provider. */
 export class GitHubAuthService implements IAuthService {

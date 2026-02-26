@@ -1,17 +1,6 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import type { APIGatewayProxyEventV2, APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-
-import { githubRequest } from "./utils/http";
-import { GitHubAuthService } from "./services/authService";
-import { GitHubApiService } from "./services/githubService";
-import { DynamoDBIdempotencyService } from "./services/idempotencyService";
-import { ThoughtLogService } from "./services/thoughtLogService";
-
-// DynamoDB client is created once at module load to reuse connections across invocations.
-const ddb = DynamoDBDocumentClient.from(
-    new DynamoDBClient({}), { marshallOptions: { removeUndefinedValues: true } },
-);
+import type { Payload } from "./types";
+import { createThoughtLogService } from "./container";
 
 export const handler = async (event: APIGatewayProxyEventV2 | APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     const method = ("requestContext" in event && "http" in event.requestContext
@@ -25,18 +14,21 @@ export const handler = async (event: APIGatewayProxyEventV2 | APIGatewayProxyEve
         return { statusCode: 500, body: JSON.stringify({ ok: false, error: "missing_repo_env" }) };
     }
 
-    const authService = new GitHubAuthService(
-        process.env.GITHUB_APP_ID,
-        process.env.GITHUB_INSTALLATION_ID,
-        process.env.GITHUB_PRIVATE_KEY_PEM,
-        githubRequest,
-    );
-    const githubService = new GitHubApiService(githubRequest);
-    const idempotencyService = new DynamoDBIdempotencyService(ddb, process.env.IDEMPOTENCY_TABLE);
-    const thoughtLog = new ThoughtLogService(authService, githubService, idempotencyService, {
+    const ttlEnv = process.env.IDEMPOTENCY_TTL_DAYS;
+    const parsedTtlDays = ttlEnv ? parseInt(ttlEnv, 10) : undefined;
+    const idempotencyTtlDays = Number.isFinite(parsedTtlDays) && (parsedTtlDays as number) > 0
+        ? (parsedTtlDays as number)
+        : undefined;
+
+    const thoughtLog = createThoughtLogService({
         owner,
         repo,
         defaultLabels: process.env.DEFAULT_LABELS || "thoughtlog",
+        githubAppId: process.env.GITHUB_APP_ID,
+        githubInstallationId: process.env.GITHUB_INSTALLATION_ID,
+        githubPrivateKeyPem: process.env.GITHUB_PRIVATE_KEY_PEM,
+        idempotencyTable: process.env.IDEMPOTENCY_TABLE,
+        idempotencyTtlDays,
     });
 
     // GET /log/yyyy-mm-dd
@@ -86,10 +78,10 @@ export const handler = async (event: APIGatewayProxyEventV2 | APIGatewayProxyEve
     }
 
     // POST /  – create a new log entry
-    let payload: { request_id?: string; captured_at?: string; raw?: string; kind?: string; labels?: unknown[] } = {};
+    let payload: Payload = {};
     try {
-        if (typeof event.body === "string") payload = JSON.parse(event.body) as typeof payload;
-        else if (typeof event.body === "object" && event.body) payload = event.body as unknown as typeof payload;
+        if (typeof event.body === "string") payload = JSON.parse(event.body) as Payload;
+        else if (typeof event.body === "object" && event.body) payload = event.body as unknown as Payload;
     } catch (e) {
         return { statusCode: 400, body: JSON.stringify({ ok: false, error: "invalid_json", detail: (e as Error).message }) };
     }

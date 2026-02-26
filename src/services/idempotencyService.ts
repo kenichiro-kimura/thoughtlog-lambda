@@ -6,12 +6,9 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import type { IdempotencyItem, IdempotencyResult } from "../types";
 import { nowEpoch } from "../utils/date";
+import type { IIdempotencyService } from "../interfaces/IIdempotencyService";
 
-export interface IIdempotencyService {
-    claim(requestId: string, payloadHash: string): Promise<IdempotencyResult>;
-    markDone(requestId: string, result: { issue_number: number; issue_url: string; comment_id: number }): Promise<void>;
-    markFailed(requestId: string, errMsg: string): Promise<void>;
-}
+export type { IIdempotencyService };
 
 /** DynamoDB-backed idempotency store. When tableName is undefined, idempotency is disabled. */
 export class DynamoDBIdempotencyService implements IIdempotencyService {
