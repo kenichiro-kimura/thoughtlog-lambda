@@ -1,0 +1,7 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/app.ts",
+  "context": {
+    "entraIssuer": "https://login.microsoftonline.com/TENANT_ID/v2.0",
+    "entraAudience": "CLIENT_ID"
+  }
+}
