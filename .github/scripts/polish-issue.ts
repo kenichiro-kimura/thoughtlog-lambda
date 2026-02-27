@@ -93,7 +93,11 @@ async function callOpenAI(content: string): Promise<OpenAIResponse> {
     });
     if (!res.ok) {
         const text = await res.text();
-        throw new Error(`OpenAI API error ${res.status}: ${text}`);
+        const preview =
+            text.length > RAW_CONTENT_PREVIEW_CHARS
+                ? `${text.slice(0, RAW_CONTENT_PREVIEW_CHARS)}...`
+                : text;
+        throw new Error(`OpenAI API error ${res.status}: ${preview}`);
     }
     return res.json() as Promise<OpenAIResponse>;
 }
