@@ -21,6 +21,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Lint scripts
+        run: npm run lint:scripts
+
+      - name: Typecheck scripts
+        run: npx tsc --noEmit --project tsconfig.scripts.json
+
       - name: Test
         run: npm test
 
