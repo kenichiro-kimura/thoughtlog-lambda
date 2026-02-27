@@ -42,6 +42,7 @@ export class ThoughtLogService implements IThoughtLogService {
         const labels = parseLabels(this.config.defaultLabels, payload.labels);
 
         let refinedPayload = payload;
+        console.log("createEntry called with payload:", payload);
         if (payload.source === "voice") {
             if (!this.textRefiner) {
                 throw new Error("Text refiner is not configured");
