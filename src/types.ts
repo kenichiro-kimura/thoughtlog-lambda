@@ -45,6 +45,20 @@ export interface GitHubSearchResult {
     items?: GitHubIssue[];
 }
 
+// ── ThoughtLog result types ────────────────────────────────────────────────────
+
+export type CreateEntryOutcome =
+    | { kind: "created"; date: string; issue_number: number; issue_url: string; comment_id: number }
+    | { kind: "idempotent"; statusCode: number; body: { ok: boolean; error?: string; idempotent?: boolean; issue_number?: number; issue_url?: string; comment_id?: number; status?: string } };
+
+export type GetLogOutcome =
+    | { kind: "found"; body: string }
+    | { kind: "not_found"; date: string };
+
+export type UpdateLogOutcome =
+    | { kind: "updated"; date: string; issue_number: number; issue_url: string }
+    | { kind: "not_found"; date: string };
+
 /** Framework-agnostic HTTP response returned by ThoughtLogRouter. */
 export interface HttpResponse {
     statusCode: number;

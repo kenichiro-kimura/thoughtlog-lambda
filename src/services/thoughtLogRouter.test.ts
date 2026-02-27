@@ -80,6 +80,17 @@ describe("ThoughtLogRouter GET /log/:date", () => {
         expect(response.statusCode).toBe(500);
         expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "network error" });
     });
+
+    it("returns 500 with stringified error when getLog throws a non-Error value", async () => {
+        service.getLog = vi.fn().mockRejectedValue("plain string error");
+        const request = makeRequest({
+            getMethod: vi.fn().mockReturnValue("GET"),
+            getDateParam: vi.fn().mockReturnValue("2024-01-15"),
+        });
+        const response = await router.handle(request);
+        expect(response.statusCode).toBe(500);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "plain string error" });
+    });
 });
 
 // ── PUT /log/:date ─────────────────────────────────────────────────────────────
@@ -147,6 +158,18 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
         const response = await router.handle(request);
         expect(response.statusCode).toBe(500);
     });
+
+    it("returns 500 with stringified error when updateLog throws a non-Error value", async () => {
+        service.updateLog = vi.fn().mockRejectedValue("plain string error");
+        const request = makeRequest({
+            getMethod: vi.fn().mockReturnValue("PUT"),
+            getDateParam: vi.fn().mockReturnValue("2024-01-15"),
+            getRawBody: vi.fn().mockReturnValue('{"raw":"text"}'),
+        });
+        const response = await router.handle(request);
+        expect(response.statusCode).toBe(500);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "plain string error" });
+    });
 });
 
 // ── POST / (create entry) ─────────────────────────────────────────────────────
@@ -202,6 +225,14 @@ describe("ThoughtLogRouter POST /", () => {
         const request = makeRequest();
         const response = await router.handle(request);
         expect(response.statusCode).toBe(500);
+    });
+
+    it("returns 500 with stringified error when createEntry throws a non-Error value", async () => {
+        service.createEntry = vi.fn().mockRejectedValue("plain string error");
+        const request = makeRequest();
+        const response = await router.handle(request);
+        expect(response.statusCode).toBe(500);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "plain string error" });
     });
 });
 
