@@ -1,0 +1,31 @@
+name: Polish Issue
+
+on:
+  issues:
+    types:
+      - labeled
+
+jobs:
+  polish:
+    if: ${{ github.event.label.name == 'ready-to-polish' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Polish Issue with OpenAI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_PROMPT: ${{ secrets.OPENAI_PROMPT }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: node .github/scripts/polish-issue.js
