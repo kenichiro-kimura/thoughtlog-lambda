@@ -98,10 +98,16 @@ async function main() {
     if (!REPO_OWNER) throw new Error('Missing environment variable: REPO_OWNER');
     if (!REPO_NAME) throw new Error('Missing environment variable: REPO_NAME');
 
-    // Collect all issue comments and join them
+    // Collect all issue comments, normalize, and join them
     const comments = await getAllComments(REPO_OWNER, REPO_NAME, ISSUE_NUMBER);
-    const combined = comments.map(c => c.body ?? '').join('\n\n');
+    const nonEmptyComments = comments
+        .map(c => (c.body ?? '').trim())
+        .filter(Boolean);
+    const combined = nonEmptyComments.join('\n\n');
 
+    if (!combined) {
+        throw new Error('Issue has no non-empty comments to polish; skipping OpenAI call');
+    }
     // Call OpenAI API with the combined message and prompt
     const response = /** @type {{ choices?: Array<{ message?: { content?: string } }> }} */ (
         await callOpenAI(combined)
