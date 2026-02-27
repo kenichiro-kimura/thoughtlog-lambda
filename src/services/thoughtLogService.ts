@@ -106,12 +106,12 @@ export class ThoughtLogService implements IThoughtLogService {
         if (!issue) return { kind: "not_found", date: dateKey };
 
         let bodyToUpdate = newBody;
+        console.log(`Updating log for date ${dateKey} with source ${source}`);
         if (source === "voice") {
             if (!this.textRefiner) {
                 throw new Error("Text refiner is not configured");
             }
             // lambdaにデバッグログを出力
-            console.debug("Refining text for voice input:", newBody);
             bodyToUpdate = await this.textRefiner.refine(newBody);
         }
 
