@@ -32,8 +32,11 @@ export class GitHubAuthService implements IAuthService {
         const tokenResp = await this.httpClient(
             `https://api.github.com/app/installations/${this.installationId}/access_tokens`,
             { method: "POST", token: jwt },
-        ) as { token: string };
+        ) as { token?: string };
 
+        if (!tokenResp.token) {
+            throw new Error("GitHub API did not return an installation token");
+        }
         return tokenResp.token;
     }
 }

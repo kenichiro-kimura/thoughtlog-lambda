@@ -1,7 +1,7 @@
 import type { IHttpRequest } from "../interfaces/IHttpRequest";
 import type { HttpResponse } from "../types";
 import { HTTP_STATUS } from "../utils/httpStatus";
-import { ThoughtLogService } from "./thoughtLogService";
+import type { IThoughtLogService } from "../interfaces/IThoughtLogService";
 
 function jsonResponse(statusCode: number, body: object): HttpResponse {
     return { statusCode, body: JSON.stringify(body) };
@@ -13,7 +13,7 @@ function jsonResponse(statusCode: number, body: object): HttpResponse {
  * and returns a framework-neutral HttpResponse.
  */
 export class ThoughtLogRouter {
-    constructor(private readonly service: ThoughtLogService) {}
+    constructor(private readonly service: IThoughtLogService) {}
 
     async handle(request: IHttpRequest): Promise<HttpResponse> {
         const method = request.getMethod();
@@ -28,7 +28,7 @@ export class ThoughtLogRouter {
                 }
                 return { statusCode: HTTP_STATUS.OK, contentType: "text/plain; charset=utf-8", body: outcome.body };
             } catch (e) {
-                return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: (e as Error).message });
+                return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: e instanceof Error ? e.message : String(e) });
             }
         }
 
@@ -39,7 +39,7 @@ export class ThoughtLogRouter {
             try {
                 putPayload = decodedBody ? JSON.parse(decodedBody) as { raw?: string; source?: string } : {};
             } catch (e) {
-                return jsonResponse(HTTP_STATUS.BAD_REQUEST, { ok: false, error: "invalid_json", detail: (e as Error).message });
+                return jsonResponse(HTTP_STATUS.BAD_REQUEST, { ok: false, error: "invalid_json", detail: e instanceof Error ? e.message : String(e) });
             }
             const newBody = (putPayload.raw ?? "").toString().trim();
             if (!newBody) {
@@ -53,7 +53,7 @@ export class ThoughtLogRouter {
                 }
                 return jsonResponse(HTTP_STATUS.OK, { ok: true, date: outcome.date, issue_number: outcome.issue_number, issue_url: outcome.issue_url });
             } catch (e) {
-                return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: (e as Error).message });
+                return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: e instanceof Error ? e.message : String(e) });
             }
         }
 
@@ -65,7 +65,7 @@ export class ThoughtLogRouter {
         try {
             payload = request.getPayload();
         } catch (e) {
-            return jsonResponse(HTTP_STATUS.BAD_REQUEST, { ok: false, error: "invalid_json", detail: (e as Error).message });
+            return jsonResponse(HTTP_STATUS.BAD_REQUEST, { ok: false, error: "invalid_json", detail: e instanceof Error ? e.message : String(e) });
         }
 
         const requestId = (payload.request_id || "").toString().trim();
@@ -86,7 +86,7 @@ export class ThoughtLogRouter {
                 comment_id: outcome.comment_id,
             });
         } catch (e) {
-            return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: (e as Error).message });
+            return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: e instanceof Error ? e.message : String(e) });
         }
     }
 }
