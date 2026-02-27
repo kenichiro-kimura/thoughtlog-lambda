@@ -69,7 +69,9 @@ async function getAllComments(owner: string, repo: string, issueNumber: string):
 }
 
 async function callOpenAI(content: string): Promise<OpenAIResponse> {
-    const model = OPENAI_MODEL ?? 'gpt-4o';
+    const model = OPENAI_MODEL && OPENAI_MODEL.trim()
+        ? OPENAI_MODEL.trim()
+        : 'gpt-4o';
     const res = await fetch(OPENAI_API, {
         method: 'POST',
         signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
