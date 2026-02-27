@@ -109,7 +109,25 @@ async function main(): Promise<void> {
     const combined = nonEmptyComments.join('\n\n');
 
     if (!combined) {
-        throw new Error('Issue has no non-empty comments to polish; skipping OpenAI call');
+        console.log(
+            `Issue #${ISSUE_NUMBER} has no non-empty comments; skipping OpenAI call and treating as success.`,
+        );
+
+        // Best-effort: remove the label so the workflow can be retriggered if needed.
+        try {
+            await githubFetch(
+                `/repos/${REPO_OWNER}/${REPO_NAME}/issues/${ISSUE_NUMBER}/labels/${encodeURIComponent(POLISH_LABEL)}`,
+                { method: 'DELETE' },
+            );
+        } catch (err) {
+            console.error(
+                `Failed to remove label "${POLISH_LABEL}" from issue #${ISSUE_NUMBER} when skipping: ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            );
+        }
+
+        return;
     }
 
     // Call OpenAI API with the combined message and prompt
