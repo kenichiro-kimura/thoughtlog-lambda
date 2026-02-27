@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run --passWithNoTests",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "lint:scripts": "eslint .github/scripts"
   },
   "keywords": [],
   "author": "",
