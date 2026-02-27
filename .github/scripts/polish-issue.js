@@ -145,6 +145,6 @@ async function main() {
 }
 
 main().catch(err => {
-    console.error(err instanceof Error ? err.message : String(err));
+    console.error(err instanceof Error ? (err.stack || err.message) : String(err));
     process.exit(1);
 });
