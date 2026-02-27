@@ -52,9 +52,7 @@ export async function openAIRequest(
         }
         const messageBase = `OpenAI API error: ${res.status} ${res.statusText}`;
         if (errorBodySnippet) {
-            const openAIErrorDetail = new Error("OpenAI API error response body");
-            (openAIErrorDetail as any).responseBodySnippet = errorBodySnippet;
-            throw new Error(messageBase, { cause: openAIErrorDetail });
+            throw new Error(messageBase, { cause: new Error(errorBodySnippet) });
         }
         throw new Error(messageBase);
     }

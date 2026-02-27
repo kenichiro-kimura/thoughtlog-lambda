@@ -1,5 +1,4 @@
 import type { HttpClient } from "../utils/http";
-import { openAIRequest } from "../utils/http";
 import type { ISecretProvider } from "../interfaces/ISecretProvider";
 import type { ITextRefinerService } from "../interfaces/ITextRefinerService";
 
@@ -20,9 +19,9 @@ interface OpenAIChatResponse {
 export class OpenAITextRefinerService implements ITextRefinerService {
     constructor(
         private readonly secretProvider: ISecretProvider,
+        private readonly httpClient: HttpClient,
         private readonly model: string = DEFAULT_MODEL,
         private readonly systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
-        private readonly httpClient: HttpClient = openAIRequest,
     ) {}
 
     async refine(text: string): Promise<string> {

@@ -47,9 +47,9 @@ export function createThoughtLogService(env: ContainerEnv): ThoughtLogService {
 
     const textRefiner: ITextRefinerService = new OpenAITextRefinerService(
         secretProvider,
+        openAIRequest,
         env.openAiModel,
         env.openAiSystemPrompt,
-        openAIRequest,
     );
 
     return new ThoughtLogService(auth, github, idempotency, {
