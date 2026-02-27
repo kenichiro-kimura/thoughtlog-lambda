@@ -12,6 +12,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       issues: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
