@@ -26,6 +26,8 @@ export const handler = async (event: APIGatewayProxyEventV2 | APIGatewayProxyEve
         githubPrivateKeySecretArn: process.env.GITHUB_PRIVATE_KEY_SECRET_ARN,
         idempotencyTable: process.env.IDEMPOTENCY_TABLE,
         idempotencyTtlDays,
+        openAiModel: process.env.OPENAI_MODEL,
+        openAiSystemPrompt: process.env.OPENAI_SYSTEM_PROMPT,
     });
 
     const request = new LambdaHttpRequest(event);

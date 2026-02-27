@@ -147,6 +147,26 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
         const response = await router.handle(request);
         expect(response.statusCode).toBe(500);
     });
+
+    it("passes source=voice to updateLog", async () => {
+        const request = makeRequest({
+            getMethod: vi.fn().mockReturnValue("PUT"),
+            getDateParam: vi.fn().mockReturnValue("2024-01-15"),
+            getRawBody: vi.fn().mockReturnValue('{"raw":"voice input","source":"voice"}'),
+        });
+        await router.handle(request);
+        expect(service.updateLog).toHaveBeenCalledWith("2024-01-15", "voice input", "voice");
+    });
+
+    it("passes undefined source when source is not provided", async () => {
+        const request = makeRequest({
+            getMethod: vi.fn().mockReturnValue("PUT"),
+            getDateParam: vi.fn().mockReturnValue("2024-01-15"),
+            getRawBody: vi.fn().mockReturnValue('{"raw":"regular text"}'),
+        });
+        await router.handle(request);
+        expect(service.updateLog).toHaveBeenCalledWith("2024-01-15", "regular text", undefined);
+    });
 });
 
 // ── POST / (create entry) ─────────────────────────────────────────────────────
