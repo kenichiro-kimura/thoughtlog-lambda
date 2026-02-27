@@ -110,6 +110,8 @@ export class ThoughtLogService implements IThoughtLogService {
             if (!this.textRefiner) {
                 throw new Error("Text refiner is not configured");
             }
+            // lambdaにデバッグログを出力
+            console.debug("Refining text for voice input:", newBody);
             bodyToUpdate = await this.textRefiner.refine(newBody);
         }
 
