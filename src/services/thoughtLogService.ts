@@ -40,7 +40,18 @@ export class ThoughtLogService implements IThoughtLogService {
 
         const dateKey = getDateKeyJst(payload);
         const labels = parseLabels(this.config.defaultLabels, payload.labels);
-        const entry = formatEntry(payload);
+
+        let refinedPayload = payload;
+        if (payload.source === "voice") {
+            if (!this.textRefiner) {
+                throw new Error("Text refiner is not configured");
+            }
+            const rawText = (payload.raw ?? "").toString().trim();
+            const refined = await this.textRefiner.refine(rawText);
+            refinedPayload = { ...payload, raw: refined };
+        }
+
+        const entry = formatEntry(refinedPayload);
 
         const payloadHash = crypto
             .createHash("sha256")
@@ -97,7 +108,7 @@ export class ThoughtLogService implements IThoughtLogService {
         return { kind: "found", body: comments.map((c) => c.body || "").join("\n") };
     }
 
-    async updateLog(dateKey: string, newBody: string, source?: string): Promise<UpdateLogOutcome> {
+    async updateLog(dateKey: string, newBody: string): Promise<UpdateLogOutcome> {
         const { owner, repo } = this.config;
         const token = await this.auth.getInstallationToken();
         const labels = parseLabels(this.config.defaultLabels, []);
@@ -105,15 +116,7 @@ export class ThoughtLogService implements IThoughtLogService {
         const issue = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
         if (!issue) return { kind: "not_found", date: dateKey };
 
-        let bodyToUpdate = newBody;
-        console.log(`Updating log for date ${dateKey} with source ${source}`);
-        if (source === "voice") {
-            if (!this.textRefiner) {
-                throw new Error("Text refiner is not configured");
-            }
-            // lambdaにデバッグログを出力
-            bodyToUpdate = await this.textRefiner.refine(newBody);
-        }
+        const bodyToUpdate = newBody;
 
         await this.github.updateIssue({ owner, repo, issueNumber: issue.number, body: bodyToUpdate, token });
         const closed = await this.github.closeIssue({ owner, repo, issueNumber: issue.number, token });

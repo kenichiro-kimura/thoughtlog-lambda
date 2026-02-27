@@ -4,6 +4,7 @@ export interface Payload {
     raw?: string;
     kind?: string;
     labels?: unknown[];
+    source?: string;
 }
 
 export interface IdempotencyItem {

@@ -35,9 +35,9 @@ export class ThoughtLogRouter {
         // PUT /log/yyyy-mm-dd
         if (method === "PUT" && dateParam) {
             const decodedBody = request.getRawBody();
-            let putPayload: { raw?: string; source?: string };
+            let putPayload: { raw?: string };
             try {
-                putPayload = decodedBody ? JSON.parse(decodedBody) as { raw?: string; source?: string } : {};
+                putPayload = decodedBody ? JSON.parse(decodedBody) as { raw?: string } : {};
             } catch (e) {
                 return jsonResponse(HTTP_STATUS.BAD_REQUEST, { ok: false, error: "invalid_json", detail: e instanceof Error ? e.message : String(e) });
             }
@@ -45,9 +45,8 @@ export class ThoughtLogRouter {
             if (!newBody) {
                 return jsonResponse(HTTP_STATUS.BAD_REQUEST, { ok: false, error: "missing_body" });
             }
-            const source = putPayload.source;
             try {
-                const outcome = await this.service.updateLog(dateParam, newBody, source);
+                const outcome = await this.service.updateLog(dateParam, newBody);
                 if (outcome.kind === "not_found") {
                     return jsonResponse(HTTP_STATUS.NOT_FOUND, { ok: false, error: "not_found", date: outcome.date });
                 }
