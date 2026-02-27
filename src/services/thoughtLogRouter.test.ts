@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ThoughtLogRouter } from "./thoughtLogRouter";
-import type { ThoughtLogService } from "./thoughtLogService";
+import type { IThoughtLogService } from "../interfaces/IThoughtLogService";
 import type { IHttpRequest } from "../interfaces/IHttpRequest";
 import type { Payload } from "../types";
 
@@ -17,7 +17,7 @@ function makeRequest(overrides: Partial<IHttpRequest> = {}): IHttpRequest {
     };
 }
 
-function makeService(overrides: Partial<ThoughtLogService> = {}): ThoughtLogService {
+function makeService(overrides: Partial<IThoughtLogService> = {}): IThoughtLogService {
     return {
         createEntry: vi.fn().mockResolvedValue({
             kind: "created",
@@ -34,14 +34,14 @@ function makeService(overrides: Partial<ThoughtLogService> = {}): ThoughtLogServ
             issue_url: "https://github.com/owner/repo/issues/42",
         }),
         ...overrides,
-    } as unknown as ThoughtLogService;
+    } as IThoughtLogService;
 }
 
 // ── GET /log/:date ─────────────────────────────────────────────────────────────
 
 describe("ThoughtLogRouter GET /log/:date", () => {
     let router: ThoughtLogRouter;
-    let service: ThoughtLogService;
+    let service: IThoughtLogService;
 
     beforeEach(() => {
         service = makeService();
@@ -80,13 +80,24 @@ describe("ThoughtLogRouter GET /log/:date", () => {
         expect(response.statusCode).toBe(500);
         expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "network error" });
     });
+
+    it("returns 500 with stringified error when getLog throws a non-Error value", async () => {
+        service.getLog = vi.fn().mockRejectedValue("plain string error");
+        const request = makeRequest({
+            getMethod: vi.fn().mockReturnValue("GET"),
+            getDateParam: vi.fn().mockReturnValue("2024-01-15"),
+        });
+        const response = await router.handle(request);
+        expect(response.statusCode).toBe(500);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "plain string error" });
+    });
 });
 
 // ── PUT /log/:date ─────────────────────────────────────────────────────────────
 
 describe("ThoughtLogRouter PUT /log/:date", () => {
     let router: ThoughtLogRouter;
-    let service: ThoughtLogService;
+    let service: IThoughtLogService;
 
     beforeEach(() => {
         service = makeService();
@@ -147,13 +158,25 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
         const response = await router.handle(request);
         expect(response.statusCode).toBe(500);
     });
+
+    it("returns 500 with stringified error when updateLog throws a non-Error value", async () => {
+        service.updateLog = vi.fn().mockRejectedValue("plain string error");
+        const request = makeRequest({
+            getMethod: vi.fn().mockReturnValue("PUT"),
+            getDateParam: vi.fn().mockReturnValue("2024-01-15"),
+            getRawBody: vi.fn().mockReturnValue('{"raw":"text"}'),
+        });
+        const response = await router.handle(request);
+        expect(response.statusCode).toBe(500);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "plain string error" });
+    });
 });
 
 // ── POST / (create entry) ─────────────────────────────────────────────────────
 
 describe("ThoughtLogRouter POST /", () => {
     let router: ThoughtLogRouter;
-    let service: ThoughtLogService;
+    let service: IThoughtLogService;
 
     beforeEach(() => {
         service = makeService();
@@ -202,6 +225,14 @@ describe("ThoughtLogRouter POST /", () => {
         const request = makeRequest();
         const response = await router.handle(request);
         expect(response.statusCode).toBe(500);
+    });
+
+    it("returns 500 with stringified error when createEntry throws a non-Error value", async () => {
+        service.createEntry = vi.fn().mockRejectedValue("plain string error");
+        const request = makeRequest();
+        const response = await router.handle(request);
+        expect(response.statusCode).toBe(500);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "plain string error" });
     });
 });
 
