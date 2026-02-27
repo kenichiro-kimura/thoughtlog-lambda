@@ -44,5 +44,21 @@ export default [
         },
         rules: sharedRules,
     },
+    {
+        files: [".github/scripts/**/*.ts"],
+        languageOptions: {
+            parser: tsparser,
+            parserOptions: {
+                project: "./tsconfig.scripts.json",
+            },
+            globals: {
+                ...globals.node,
+            },
+        },
+        plugins: {
+            "@typescript-eslint": tseslint,
+        },
+        rules: sharedRules,
+    },
 ];
 
