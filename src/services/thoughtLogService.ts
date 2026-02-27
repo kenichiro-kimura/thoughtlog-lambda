@@ -5,6 +5,7 @@ import { parseLabels, formatEntry } from "../utils/format";
 import type { IAuthService } from "../interfaces/IAuthService";
 import type { IGitHubService } from "../interfaces/IGitHubService";
 import type { IIdempotencyService } from "../interfaces/IIdempotencyService";
+import type { IThoughtLogService } from "../interfaces/IThoughtLogService";
 
 export interface ThoughtLogConfig {
     owner: string;
@@ -30,7 +31,7 @@ export type UpdateLogOutcome =
  * Orchestrates ThoughtLog business logic.
  * Depends only on interfaces so all external I/O can be replaced with test doubles.
  */
-export class ThoughtLogService {
+export class ThoughtLogService implements IThoughtLogService {
     constructor(
         private readonly auth: IAuthService,
         private readonly github: IGitHubService,
@@ -88,7 +89,7 @@ export class ThoughtLogService {
                 comment_id: comment.id,
             };
         } catch (e) {
-            await this.idempotency.markFailed(requestId, (e as Error).message);
+            await this.idempotency.markFailed(requestId, e instanceof Error ? e.message : String(e));
             throw e;
         }
     }

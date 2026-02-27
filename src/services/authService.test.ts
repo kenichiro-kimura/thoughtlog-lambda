@@ -54,4 +54,12 @@ describe("GitHubAuthService.getInstallationToken", () => {
         const calledUrl = (http as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
         expect(calledUrl).toContain("/app/installations/99/access_tokens");
     });
+
+    it("throws when GitHub API does not return a token", async () => {
+        const http: HttpClient = vi.fn().mockResolvedValue({});
+        const service = new GitHubAuthService("42", "99", makeSecretProvider(privateKey), http);
+        await expect(service.getInstallationToken()).rejects.toThrow(
+            "GitHub API did not return an installation token",
+        );
+    });
 });

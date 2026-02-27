@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ThoughtLogRouter } from "./thoughtLogRouter";
-import type { ThoughtLogService } from "./thoughtLogService";
+import type { IThoughtLogService } from "../interfaces/IThoughtLogService";
 import type { IHttpRequest } from "../interfaces/IHttpRequest";
 import type { Payload } from "../types";
 
@@ -17,7 +17,7 @@ function makeRequest(overrides: Partial<IHttpRequest> = {}): IHttpRequest {
     };
 }
 
-function makeService(overrides: Partial<ThoughtLogService> = {}): ThoughtLogService {
+function makeService(overrides: Partial<IThoughtLogService> = {}): IThoughtLogService {
     return {
         createEntry: vi.fn().mockResolvedValue({
             kind: "created",
@@ -34,14 +34,14 @@ function makeService(overrides: Partial<ThoughtLogService> = {}): ThoughtLogServ
             issue_url: "https://github.com/owner/repo/issues/42",
         }),
         ...overrides,
-    } as unknown as ThoughtLogService;
+    } as IThoughtLogService;
 }
 
 // ── GET /log/:date ─────────────────────────────────────────────────────────────
 
 describe("ThoughtLogRouter GET /log/:date", () => {
     let router: ThoughtLogRouter;
-    let service: ThoughtLogService;
+    let service: IThoughtLogService;
 
     beforeEach(() => {
         service = makeService();
@@ -86,7 +86,7 @@ describe("ThoughtLogRouter GET /log/:date", () => {
 
 describe("ThoughtLogRouter PUT /log/:date", () => {
     let router: ThoughtLogRouter;
-    let service: ThoughtLogService;
+    let service: IThoughtLogService;
 
     beforeEach(() => {
         service = makeService();
@@ -153,7 +153,7 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
 
 describe("ThoughtLogRouter POST /", () => {
     let router: ThoughtLogRouter;
-    let service: ThoughtLogService;
+    let service: IThoughtLogService;
 
     beforeEach(() => {
         service = makeService();
