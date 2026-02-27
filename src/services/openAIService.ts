@@ -17,12 +17,18 @@ interface OpenAIChatResponse {
 
 /** Refines text using the OpenAI Chat Completions API. */
 export class OpenAITextRefinerService implements ITextRefinerService {
+    private readonly model: string;
+    private readonly systemPrompt: string;
+
     constructor(
         private readonly secretProvider: ISecretProvider,
         private readonly httpClient: HttpClient,
-        private readonly model: string = DEFAULT_MODEL,
-        private readonly systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
-    ) {}
+        model?: string,
+        systemPrompt?: string,
+    ) {
+        this.model = model ?? DEFAULT_MODEL;
+        this.systemPrompt = systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    }
 
     async refine(text: string): Promise<string> {
         const apiKey = await this.secretProvider.getOpenAiApiKey();
