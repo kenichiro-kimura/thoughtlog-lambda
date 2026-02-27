@@ -1,4 +1,3 @@
-// @ts-check
 // Script to polish a GitHub issue using OpenAI API.
 // Called by the polish.yml workflow when an issue is labeled 'ready-to-polish'.
 
@@ -6,6 +5,7 @@ const {
     GITHUB_TOKEN,
     OPENAI_API_KEY,
     OPENAI_PROMPT,
+    OPENAI_MODEL,
     ISSUE_NUMBER,
     REPO_OWNER,
     REPO_NAME,
@@ -15,20 +15,34 @@ const GITHUB_API = 'https://api.github.com';
 const OPENAI_API = 'https://api.openai.com/v1/chat/completions';
 const POLISH_LABEL = 'ready-to-polish';
 
-/**
- * @param {string} path
- * @param {RequestInit} [options]
- * @returns {Promise<unknown>}
- */
-async function githubFetch(path, options = {}) {
+/** Timeout for GitHub API requests in milliseconds. */
+const GITHUB_TIMEOUT_MS = 30_000;
+/** Timeout for OpenAI API requests in milliseconds. */
+const OPENAI_TIMEOUT_MS = 60_000;
+
+interface GitHubComment {
+    body?: string;
+}
+
+interface OpenAIResponse {
+    choices?: Array<{ message?: { content?: string } }>;
+}
+
+interface PolishResult {
+    title?: string;
+    body?: string;
+}
+
+async function githubFetch(path: string, options: RequestInit = {}): Promise<unknown> {
     const res = await fetch(`${GITHUB_API}${path}`, {
         ...options,
+        signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
         headers: {
             'Accept': 'application/vnd.github+json',
             'Authorization': `Bearer ${GITHUB_TOKEN}`,
             'X-GitHub-Api-Version': '2022-11-28',
             'Content-Type': 'application/json',
-            ...(/** @type {Record<string, string>} */ (options.headers ?? {})),
+            ...((options.headers ?? {}) as Record<string, string>),
         },
     });
     if (!res.ok) {
@@ -39,22 +53,13 @@ async function githubFetch(path, options = {}) {
     return text ? JSON.parse(text) : null;
 }
 
-/**
- * @param {string} owner
- * @param {string} repo
- * @param {string} issueNumber
- * @returns {Promise<Array<{ body?: string }>>}
- */
-async function getAllComments(owner, repo, issueNumber) {
-    /** @type {Array<{ body?: string }>} */
-    const comments = [];
+async function getAllComments(owner: string, repo: string, issueNumber: string): Promise<GitHubComment[]> {
+    const comments: GitHubComment[] = [];
     let page = 1;
     while (true) {
-        const batch = /** @type {Array<{ body?: string }> | null} */ (
-            await githubFetch(
-                `/repos/${owner}/${repo}/issues/${issueNumber}/comments?per_page=100&page=${page}`,
-            )
-        );
+        const batch = (await githubFetch(
+            `/repos/${owner}/${repo}/issues/${issueNumber}/comments?per_page=100&page=${page}`,
+        )) as GitHubComment[] | null;
         if (!batch || batch.length === 0) break;
         comments.push(...batch);
         if (batch.length < 100) break;
@@ -63,19 +68,17 @@ async function getAllComments(owner, repo, issueNumber) {
     return comments;
 }
 
-/**
- * @param {string} content
- * @returns {Promise<unknown>}
- */
-async function callOpenAI(content) {
+async function callOpenAI(content: string): Promise<OpenAIResponse> {
+    const model = OPENAI_MODEL ?? 'gpt-4o';
     const res = await fetch(OPENAI_API, {
         method: 'POST',
+        signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
-            model: 'gpt-4o',
+            model,
             messages: [
                 { role: 'system', content: OPENAI_PROMPT },
                 { role: 'user', content },
@@ -87,10 +90,10 @@ async function callOpenAI(content) {
         const text = await res.text();
         throw new Error(`OpenAI API error ${res.status}: ${text}`);
     }
-    return res.json();
+    return res.json() as Promise<OpenAIResponse>;
 }
 
-async function main() {
+async function main(): Promise<void> {
     if (!GITHUB_TOKEN) throw new Error('Missing environment variable: GITHUB_TOKEN');
     if (!OPENAI_API_KEY) throw new Error('Missing environment variable: OPENAI_API_KEY');
     if (!OPENAI_PROMPT) throw new Error('Missing environment variable: OPENAI_PROMPT');
@@ -108,23 +111,22 @@ async function main() {
     if (!combined) {
         throw new Error('Issue has no non-empty comments to polish; skipping OpenAI call');
     }
+
     // Call OpenAI API with the combined message and prompt
-    const response = /** @type {{ choices?: Array<{ message?: { content?: string } }> }} */ (
-        await callOpenAI(combined)
-    );
+    const response = await callOpenAI(combined);
     const rawContent = response.choices?.[0]?.message?.content;
     if (!rawContent) {
         throw new Error('No content returned from OpenAI API');
     }
 
-    let parsed;
+    let parsed: PolishResult;
     try {
-        parsed = JSON.parse(rawContent);
+        parsed = JSON.parse(rawContent) as PolishResult;
     } catch {
         throw new Error(`Failed to parse OpenAI response as JSON: ${rawContent}`);
     }
 
-    const { title, body } = /** @type {{ title?: string; body?: string }} */ (parsed);
+    const { title, body } = parsed;
     if (!title || !body) {
         throw new Error(`OpenAI response is missing "title" or "body": ${rawContent}`);
     }
@@ -154,10 +156,11 @@ async function main() {
             }`,
         );
     }
+
     console.log(`Successfully polished and closed issue #${ISSUE_NUMBER}`);
 }
 
 main().catch(err => {
-    console.error(err instanceof Error ? (err.stack || err.message) : String(err));
+    console.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
     process.exit(1);
 });

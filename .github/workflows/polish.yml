@@ -26,7 +26,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_PROMPT: ${{ secrets.OPENAI_PROMPT }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
-        run: node .github/scripts/polish-issue.js
+        run: npx tsx .github/scripts/polish-issue.ts
