@@ -66,4 +66,3 @@ export interface HttpResponse {
     contentType?: string;
     body: string;
 }
-

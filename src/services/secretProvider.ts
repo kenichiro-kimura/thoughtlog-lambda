@@ -5,7 +5,15 @@ export type { ISecretProvider };
 
 const DEFAULT_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-/** Fetches a PEM-encoded private key from AWS Secrets Manager at runtime, with in-memory caching. */
+interface AppSecrets {
+    github_private_key: string;
+    openai_api_key?: string;
+}
+
+/** Fetches secrets from AWS Secrets Manager at runtime, with in-memory caching.
+ *  The secret must be a JSON string that contains github_private_key, and if you use
+ *  OpenAI-related features it must also include openai_api_key.
+ */
 export class SecretsManagerSecretProvider implements ISecretProvider {
     private readonly client: SecretsManagerClient;
     private readonly ttlMs: number;
@@ -21,7 +29,7 @@ export class SecretsManagerSecretProvider implements ISecretProvider {
         this.ttlMs = ttlMs;
     }
 
-    async getPrivateKeyPem(): Promise<string> {
+    private async fetchRaw(): Promise<string> {
         if (this.cachedValue && Date.now() < this.cacheExpiresAt) {
             return this.cachedValue;
         }
@@ -35,5 +43,30 @@ export class SecretsManagerSecretProvider implements ISecretProvider {
         this.cachedValue = value;
         this.cacheExpiresAt = Date.now() + this.ttlMs;
         return value;
+    }
+
+    private async parseSecrets(): Promise<AppSecrets> {
+        const raw = await this.fetchRaw();
+        try {
+            return JSON.parse(raw) as AppSecrets;
+        } catch {
+            throw new Error(`Secret ${this.secretArn} is not valid JSON`);
+        }
+    }
+
+    async getPrivateKeyPem(): Promise<string> {
+        const secrets = await this.parseSecrets();
+        if (!secrets.github_private_key) {
+            throw new Error(`Secret ${this.secretArn} does not contain github_private_key`);
+        }
+        return secrets.github_private_key;
+    }
+
+    async getOpenAiApiKey(): Promise<string> {
+        const secrets = await this.parseSecrets();
+        if (!secrets.openai_api_key) {
+            throw new Error(`Secret ${this.secretArn} does not contain openai_api_key`);
+        }
+        return secrets.openai_api_key;
     }
 }

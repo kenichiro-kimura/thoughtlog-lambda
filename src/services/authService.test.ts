@@ -16,6 +16,7 @@ const { privateKey } = crypto.generateKeyPairSync("rsa", {
 function makeSecretProvider(pem: string | undefined): ISecretProvider {
     return {
         getPrivateKeyPem: vi.fn().mockResolvedValue(pem),
+        getOpenAiApiKey: vi.fn().mockResolvedValue("sk-test"),
     };
 }
 

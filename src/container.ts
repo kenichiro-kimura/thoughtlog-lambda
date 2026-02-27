@@ -1,13 +1,15 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
-import { githubRequest } from "./utils/http";
+import { githubRequest, openAIRequest } from "./utils/http";
 import { GitHubAuthService } from "./services/authService";
 import { GitHubApiService } from "./services/githubService";
 import { DynamoDBIdempotencyService } from "./services/idempotencyService";
 import { SecretsManagerSecretProvider } from "./services/secretProvider";
+import { OpenAITextRefinerService } from "./services/openAIService";
 import { ThoughtLogService } from "./services/thoughtLogService";
 import type { ThoughtLogConfig } from "./services/thoughtLogService";
+import type { ITextRefinerService } from "./interfaces/ITextRefinerService";
 
 // Clients are created once at module load to reuse connections across invocations.
 const ddb = DynamoDBDocumentClient.from(
@@ -21,6 +23,8 @@ export interface ContainerEnv extends ThoughtLogConfig {
     githubPrivateKeySecretArn: string | undefined;
     idempotencyTable: string | undefined;
     idempotencyTtlDays: number | undefined;
+    openAiModel: string | undefined;
+    openAiSystemPrompt: string | undefined;
 }
 
 /**
@@ -41,9 +45,16 @@ export function createThoughtLogService(env: ContainerEnv): ThoughtLogService {
     const github = new GitHubApiService(githubRequest);
     const idempotency = new DynamoDBIdempotencyService(ddb, env.idempotencyTable, env.idempotencyTtlDays);
 
+    const textRefiner: ITextRefinerService = new OpenAITextRefinerService(
+        secretProvider,
+        openAIRequest,
+        env.openAiModel,
+        env.openAiSystemPrompt,
+    );
+
     return new ThoughtLogService(auth, github, idempotency, {
         owner: env.owner,
         repo: env.repo,
         defaultLabels: env.defaultLabels,
-    });
+    }, textRefiner);
 }

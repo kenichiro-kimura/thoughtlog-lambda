@@ -3,6 +3,7 @@ import { ThoughtLogService } from "./thoughtLogService";
 import type { IAuthService } from "../interfaces/IAuthService";
 import type { IGitHubService } from "../interfaces/IGitHubService";
 import type { IIdempotencyService } from "../interfaces/IIdempotencyService";
+import type { ITextRefinerService } from "../interfaces/ITextRefinerService";
 import type { GitHubIssue, GitHubComment } from "../types";
 
 // ── shared test doubles ────────────────────────────────────────────────────────
@@ -34,6 +35,10 @@ function makeIdempotency(overrides: Partial<IIdempotencyService> = {}): IIdempot
         markFailed: vi.fn().mockResolvedValue(undefined),
         ...overrides,
     };
+}
+
+function makeTextRefiner(refined = "refined text"): ITextRefinerService {
+    return { refine: vi.fn().mockResolvedValue(refined) };
 }
 
 const config = { owner: "owner", repo: "repo", defaultLabels: "thoughtlog" };
@@ -151,5 +156,29 @@ describe("ThoughtLogService.updateLog", () => {
         const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
         const outcome = await service.updateLog("2024-01-15", "text");
         expect(outcome.kind).toBe("not_found");
+    });
+
+    it("refines text with textRefiner when source is voice", async () => {
+        const textRefiner = makeTextRefiner("cleaned text");
+        const github = makeGitHub();
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config, textRefiner);
+        await service.updateLog("2024-01-15", "raw voice text", "voice");
+        expect(textRefiner.refine).toHaveBeenCalledWith("raw voice text");
+        const updateCall = (github.updateIssue as ReturnType<typeof vi.fn>).mock.calls[0][0];
+        expect(updateCall.body).toBe("cleaned text");
+    });
+
+    it("throws when source is voice but no textRefiner is configured", async () => {
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config);
+        await expect(
+            service.updateLog("2024-01-15", "raw voice text", "voice"),
+        ).rejects.toThrow("Text refiner is not configured");
+    });
+
+    it("does not call textRefiner when source is not voice", async () => {
+        const textRefiner = makeTextRefiner();
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, textRefiner);
+        await service.updateLog("2024-01-15", "regular text");
+        expect(textRefiner.refine).not.toHaveBeenCalled();
     });
 });
