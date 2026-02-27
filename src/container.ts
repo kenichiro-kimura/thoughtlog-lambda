@@ -1,7 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
-import { githubRequest } from "./utils/http";
+import { githubRequest, openAIRequest } from "./utils/http";
 import { GitHubAuthService } from "./services/authService";
 import { GitHubApiService } from "./services/githubService";
 import { DynamoDBIdempotencyService } from "./services/idempotencyService";
@@ -49,7 +49,7 @@ export function createThoughtLogService(env: ContainerEnv): ThoughtLogService {
         secretProvider,
         env.openAiModel,
         env.openAiSystemPrompt,
-        fetch,
+        openAIRequest,
     );
 
     return new ThoughtLogService(auth, github, idempotency, {

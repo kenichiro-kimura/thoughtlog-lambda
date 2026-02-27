@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { OpenAITextRefinerService } from "./openAIService";
 import type { ISecretProvider } from "../interfaces/ISecretProvider";
+import type { HttpClient } from "../utils/http";
 
 const API_KEY = "sk-test-key";
 
@@ -11,23 +12,22 @@ function makeSecretProvider(apiKey = API_KEY): ISecretProvider {
     };
 }
 
+function makeHttpClient(returnValue: unknown = {}): HttpClient {
+    return vi.fn().mockResolvedValue(returnValue);
+}
+
 describe("OpenAITextRefinerService", () => {
-    const mockFetch = vi.fn();
+    let mockHttp: HttpClient;
 
     beforeEach(() => {
-        mockFetch.mockClear();
+        mockHttp = makeHttpClient();
     });
 
     it("returns refined text from OpenAI response", async () => {
-        mockFetch.mockResolvedValue({
-            ok: true,
-            json: vi.fn().mockResolvedValue({
-                choices: [{ message: { content: "refined text" } }],
-            }),
-        });
+        mockHttp = makeHttpClient({ choices: [{ message: { content: "refined text" } }] });
 
         const provider = makeSecretProvider();
-        const service = new OpenAITextRefinerService(provider, "gpt-4o-mini", "clean up the text", mockFetch as typeof fetch);
+        const service = new OpenAITextRefinerService(provider, "gpt-4o-mini", "clean up the text", mockHttp);
         const result = await service.refine("raw voice input");
 
         expect(result).toBe("refined text");
@@ -35,80 +35,60 @@ describe("OpenAITextRefinerService", () => {
     });
 
     it("sends correct request to OpenAI API", async () => {
-        mockFetch.mockResolvedValue({
-            ok: true,
-            json: vi.fn().mockResolvedValue({
-                choices: [{ message: { content: "result" } }],
-            }),
-        });
+        mockHttp = makeHttpClient({ choices: [{ message: { content: "result" } }] });
 
-        const service = new OpenAITextRefinerService(makeSecretProvider(), "gpt-4o-mini", "system prompt", mockFetch as typeof fetch);
+        const service = new OpenAITextRefinerService(makeSecretProvider(), "gpt-4o-mini", "system prompt", mockHttp);
         await service.refine("user input");
 
-        expect(mockFetch).toHaveBeenCalledWith(
+        expect(mockHttp).toHaveBeenCalledWith(
             "https://api.openai.com/v1/chat/completions",
             expect.objectContaining({
                 method: "POST",
-                headers: expect.objectContaining({
-                    "Authorization": `Bearer ${API_KEY}`,
-                    "Content-Type": "application/json",
-                }),
+                token: API_KEY,
+                body: {
+                    model: "gpt-4o-mini",
+                    messages: [
+                        { role: "system", content: "system prompt" },
+                        { role: "user", content: "user input" },
+                    ],
+                },
             }),
         );
-
-        const callBody = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
-        expect(callBody.model).toBe("gpt-4o-mini");
-        expect(callBody.messages).toEqual([
-            { role: "system", content: "system prompt" },
-            { role: "user", content: "user input" },
-        ]);
     });
 
-    it("throws when OpenAI API returns non-ok response", async () => {
-        mockFetch.mockResolvedValue({
-            ok: false,
-            status: 429,
-            statusText: "Too Many Requests",
-        });
+    it("throws when httpClient rejects (e.g. non-ok response)", async () => {
+        mockHttp = vi.fn().mockRejectedValue(new Error("OpenAI API error: 429 Too Many Requests"));
 
-        const service = new OpenAITextRefinerService(makeSecretProvider(), "gpt-4o-mini", "prompt", mockFetch as typeof fetch);
+        const service = new OpenAITextRefinerService(makeSecretProvider(), "gpt-4o-mini", "prompt", mockHttp);
         await expect(service.refine("text")).rejects.toThrow("OpenAI API error: 429 Too Many Requests");
     });
 
-    it("wraps AbortError as timeout error with original cause", async () => {
-        const abortError = Object.assign(new Error("The operation was aborted."), { name: "AbortError" });
-        mockFetch.mockRejectedValue(abortError);
+    it("throws when httpClient rejects with timeout error", async () => {
+        const timeoutError = new Error("OpenAI API request timed out after 10000ms");
+        mockHttp = vi.fn().mockRejectedValue(timeoutError);
 
-        const service = new OpenAITextRefinerService(makeSecretProvider(), "gpt-4o-mini", "prompt", mockFetch as typeof fetch);
-        const rejection = await service.refine("text").catch((e: unknown) => e);
-        expect(rejection).toBeInstanceOf(Error);
-        expect((rejection as Error).message).toMatch(/timed out/);
-        expect((rejection as Error).cause).toBe(abortError);
+        const service = new OpenAITextRefinerService(makeSecretProvider(), "gpt-4o-mini", "prompt", mockHttp);
+        await expect(service.refine("text")).rejects.toThrow(/timed out/);
     });
 
     it("throws when OpenAI API returns empty content", async () => {
-        mockFetch.mockResolvedValue({
-            ok: true,
-            json: vi.fn().mockResolvedValue({ choices: [] }),
-        });
+        mockHttp = makeHttpClient({ choices: [] });
 
-        const service = new OpenAITextRefinerService(makeSecretProvider(), "gpt-4o-mini", "prompt", mockFetch as typeof fetch);
+        const service = new OpenAITextRefinerService(makeSecretProvider(), "gpt-4o-mini", "prompt", mockHttp);
         await expect(service.refine("text")).rejects.toThrow("OpenAI API returned no choices");
     });
 
     it("uses default model and prompt when not specified", async () => {
-        mockFetch.mockResolvedValue({
-            ok: true,
-            json: vi.fn().mockResolvedValue({
-                choices: [{ message: { content: "result" } }],
-            }),
-        });
+        mockHttp = makeHttpClient({ choices: [{ message: { content: "result" } }] });
 
-        const service = new OpenAITextRefinerService(makeSecretProvider(), undefined, undefined, mockFetch as typeof fetch);
+        const service = new OpenAITextRefinerService(makeSecretProvider(), undefined, undefined, mockHttp);
         await service.refine("text");
 
-        const callBody = JSON.parse((mockFetch.mock.calls[0][1] as RequestInit).body as string);
-        expect(callBody.model).toBe("gpt-4o-mini");
-        expect(callBody.messages[0].role).toBe("system");
+        expect(mockHttp).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({
+                body: expect.objectContaining({ model: "gpt-4o-mini" }),
+            }),
+        );
     });
 });
