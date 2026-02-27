@@ -11,7 +11,8 @@ interface AppSecrets {
 }
 
 /** Fetches secrets from AWS Secrets Manager at runtime, with in-memory caching.
- *  The secret must be a JSON string with keys: github_private_key, openai_api_key.
+ *  The secret must be a JSON string that contains github_private_key, and if you use
+ *  OpenAI-related features it must also include openai_api_key.
  */
 export class SecretsManagerSecretProvider implements ISecretProvider {
     private readonly client: SecretsManagerClient;

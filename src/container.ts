@@ -45,10 +45,11 @@ export function createThoughtLogService(env: ContainerEnv): ThoughtLogService {
     const github = new GitHubApiService(githubRequest);
     const idempotency = new DynamoDBIdempotencyService(ddb, env.idempotencyTable, env.idempotencyTtlDays);
 
-    let textRefiner: ITextRefinerService | undefined;
-    if (env.openAiModel) {
-        textRefiner = new OpenAITextRefinerService(secretProvider, env.openAiModel, env.openAiSystemPrompt);
-    }
+    const textRefiner: ITextRefinerService = new OpenAITextRefinerService(
+        secretProvider,
+        env.openAiModel,
+        env.openAiSystemPrompt,
+    );
 
     return new ThoughtLogService(auth, github, idempotency, {
         owner: env.owner,

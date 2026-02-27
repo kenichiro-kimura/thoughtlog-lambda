@@ -25,23 +25,62 @@ export class OpenAITextRefinerService implements ITextRefinerService {
     async refine(text: string): Promise<string> {
         const apiKey = await this.secretProvider.getOpenAiApiKey();
 
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-                model: this.model,
-                messages: [
-                    { role: "system", content: this.systemPrompt },
-                    { role: "user", content: text },
-                ],
-            }),
-        });
+        // タイムアウト付きで OpenAI API を呼び出す
+        const OPENAI_TIMEOUT_MS = 10_000; // 必要に応じて調整
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+        }, OPENAI_TIMEOUT_MS);
+
+        let response: Response;
+        try {
+            response = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                    model: this.model,
+                    messages: [
+                        { role: "system", content: this.systemPrompt },
+                        { role: "user", content: text },
+                    ],
+                }),
+                signal: controller.signal,
+            });
+        } catch (error) {
+            // AbortError をタイムアウトエラーとして扱う
+            if (error instanceof Error && error.name === "AbortError") {
+                throw new Error(`OpenAI API request timed out after ${OPENAI_TIMEOUT_MS}ms`);
+            }
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
+        }
 
         if (!response.ok) {
-            throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+            let errorBodySnippet = "";
+            try {
+                const rawBody = await response.text();
+                const MAX_ERROR_BODY_LENGTH = 1000;
+                if (rawBody) {
+                    errorBodySnippet =
+                        rawBody.length > MAX_ERROR_BODY_LENGTH
+                            ? `${rawBody.slice(0, MAX_ERROR_BODY_LENGTH)}...[truncated]`
+                            : rawBody;
+                }
+            } catch {
+                // レスポンス本文が読めない場合は本文なしでエラーを返す
+            }
+
+            const messageBase = `OpenAI API error: ${response.status} ${response.statusText}`;
+            const message =
+                errorBodySnippet !== ""
+                    ? `${messageBase} - Body: ${errorBodySnippet}`
+                    : messageBase;
+
+            throw new Error(message);
         }
 
         const data = await response.json() as OpenAIChatResponse;
