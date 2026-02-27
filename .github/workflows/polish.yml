@@ -31,4 +31,4 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPO_OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
-        run: npx tsx .github/scripts/polish-issue.ts
+        run: npx tsx@4.7.0 .github/scripts/polish-issue.ts
