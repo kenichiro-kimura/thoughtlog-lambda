@@ -50,6 +50,7 @@ export class ThoughtLogService implements IThoughtLogService {
             const rawText = (payload.raw ?? "").toString().trim();
             const refined = await this.textRefiner.refine(rawText);
             refinedPayload = { ...payload, raw: refined };
+            console.log("Refined text:", refined);
         }
 
         const entry = formatEntry(refinedPayload);
