@@ -112,10 +112,16 @@ async function main(): Promise<void> {
 
     if (!combined) {
         console.log(
-            `Issue #${ISSUE_NUMBER} has no non-empty comments; skipping OpenAI call and treating as success.`,
+            `Issue #${ISSUE_NUMBER} has no non-empty comments; skipping OpenAI call.`,
         );
 
-        // Best-effort: remove the label so the workflow can be retriggered if needed.
+        // Close the issue even when there are no comments.
+        await githubFetch(`/repos/${REPO_OWNER}/${REPO_NAME}/issues/${ISSUE_NUMBER}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ state: 'closed' }),
+        });
+
+        // Best-effort: remove the label.
         try {
             await githubFetch(
                 `/repos/${REPO_OWNER}/${REPO_NAME}/issues/${ISSUE_NUMBER}/labels/${encodeURIComponent(POLISH_LABEL)}`,
@@ -129,6 +135,7 @@ async function main(): Promise<void> {
             );
         }
 
+        console.log(`Closed issue #${ISSUE_NUMBER} without polishing (no comments).`);
         return;
     }
 
