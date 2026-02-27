@@ -37,16 +37,16 @@ interface PolishResult {
 }
 
 async function githubFetch(path: string, options: RequestInit = {}): Promise<unknown> {
+    const headers = new Headers(options.headers as HeadersInit | undefined);
+    headers.set("Accept", "application/vnd.github+json");
+    headers.set("Authorization", `Bearer ${GITHUB_TOKEN}`);
+    headers.set("X-GitHub-Api-Version", "2022-11-28");
+    headers.set("Content-Type", "application/json");
+
     const res = await fetch(`${GITHUB_API}${path}`, {
         ...options,
         signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
-        headers: {
-            "Accept": "application/vnd.github+json",
-            "Authorization": `Bearer ${GITHUB_TOKEN}`,
-            "X-GitHub-Api-Version": "2022-11-28",
-            "Content-Type": "application/json",
-            ...((options.headers ?? {}) as Record<string, string>),
-        },
+        headers,
     });
     if (!res.ok) {
         const text = await res.text();
