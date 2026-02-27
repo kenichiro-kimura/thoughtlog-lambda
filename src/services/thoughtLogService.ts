@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Payload, GitHubIssue } from "../types";
+import type { Payload, GitHubIssue, CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome } from "../types";
 import { getDateKeyJst } from "../utils/date";
 import { parseLabels, formatEntry } from "../utils/format";
 import type { IAuthService } from "../interfaces/IAuthService";
@@ -7,25 +7,14 @@ import type { IGitHubService } from "../interfaces/IGitHubService";
 import type { IIdempotencyService } from "../interfaces/IIdempotencyService";
 import type { IThoughtLogService } from "../interfaces/IThoughtLogService";
 
+export type { IThoughtLogService };
+export type { CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome };
+
 export interface ThoughtLogConfig {
     owner: string;
     repo: string;
     defaultLabels: string;
 }
-
-// ── Result discriminated unions ────────────────────────────────────────────────
-
-export type CreateEntryOutcome =
-    | { kind: "created"; date: string; issue_number: number; issue_url: string; comment_id: number }
-    | { kind: "idempotent"; statusCode: number; body: { ok: boolean; error?: string; idempotent?: boolean; issue_number?: number; issue_url?: string; comment_id?: number; status?: string } };
-
-export type GetLogOutcome =
-    | { kind: "found"; body: string }
-    | { kind: "not_found"; date: string };
-
-export type UpdateLogOutcome =
-    | { kind: "updated"; date: string; issue_number: number; issue_url: string }
-    | { kind: "not_found"; date: string };
 
 /**
  * Orchestrates ThoughtLog business logic.

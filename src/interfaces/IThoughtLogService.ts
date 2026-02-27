@@ -1,7 +1,4 @@
-import type { Payload } from "../types";
-import type { CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome } from "../services/thoughtLogService";
-
-export type { CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome };
+import type { Payload, CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome } from "../types";
 
 export interface IThoughtLogService {
     createEntry(payload: Payload): Promise<CreateEntryOutcome>;
