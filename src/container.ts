@@ -49,6 +49,7 @@ export function createThoughtLogService(env: ContainerEnv): ThoughtLogService {
         secretProvider,
         env.openAiModel,
         env.openAiSystemPrompt,
+        fetch,
     );
 
     return new ThoughtLogService(auth, github, idempotency, {

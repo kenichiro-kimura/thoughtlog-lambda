@@ -20,6 +20,7 @@ export class OpenAITextRefinerService implements ITextRefinerService {
         private readonly secretProvider: ISecretProvider,
         private readonly model: string = DEFAULT_MODEL,
         private readonly systemPrompt: string = DEFAULT_SYSTEM_PROMPT,
+        private readonly fetchFn: typeof fetch = fetch,
     ) {}
 
     async refine(text: string): Promise<string> {
@@ -34,7 +35,7 @@ export class OpenAITextRefinerService implements ITextRefinerService {
 
         let response: Response;
         try {
-            response = await fetch("https://api.openai.com/v1/chat/completions", {
+            response = await this.fetchFn("https://api.openai.com/v1/chat/completions", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -52,7 +53,7 @@ export class OpenAITextRefinerService implements ITextRefinerService {
         } catch (error) {
             // AbortError をタイムアウトエラーとして扱う
             if (error instanceof Error && error.name === "AbortError") {
-                throw new Error(`OpenAI API request timed out after ${OPENAI_TIMEOUT_MS}ms`);
+                throw new Error(`OpenAI API request timed out after ${OPENAI_TIMEOUT_MS}ms`, { cause: error });
             }
             throw error;
         } finally {
