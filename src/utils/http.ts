@@ -7,7 +7,7 @@ export interface HttpRequestOptions {
 /** Minimal HTTP client type used for dependency injection. */
 export type HttpClient = (url: string, options?: HttpRequestOptions) => Promise<unknown>;
 
-const OPENAI_TIMEOUT_MS = 30_000;
+const OPENAI_TIMEOUT_MS = process.env["OPENAI_TIMEOUT_MS"] ? parseInt(process.env["OPENAI_TIMEOUT_MS"], 10) : 30_000;
 
 /** OpenAI-aware HTTP client implementation with timeout and error body support. */
 export async function openAIRequest(
