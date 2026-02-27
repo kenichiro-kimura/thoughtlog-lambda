@@ -123,24 +123,31 @@ async function main() {
         throw new Error(`OpenAI response is missing "title" or "body": ${rawContent}`);
     }
 
-    // Update the issue title and body
+    // Update the issue title and body (fail-fast on error)
     await githubFetch(`/repos/${REPO_OWNER}/${REPO_NAME}/issues/${ISSUE_NUMBER}`, {
         method: 'PATCH',
         body: JSON.stringify({ title, body }),
     });
 
-    // Remove the 'ready-to-polish' label
-    await githubFetch(
-        `/repos/${REPO_OWNER}/${REPO_NAME}/issues/${ISSUE_NUMBER}/labels/${encodeURIComponent(POLISH_LABEL)}`,
-        { method: 'DELETE' },
-    );
-
-    // Close the issue
+    // Close the issue (fail-fast on error)
     await githubFetch(`/repos/${REPO_OWNER}/${REPO_NAME}/issues/${ISSUE_NUMBER}`, {
         method: 'PATCH',
         body: JSON.stringify({ state: 'closed' }),
     });
 
+    // Remove the 'ready-to-polish' label (best-effort; do not block closing the issue)
+    try {
+        await githubFetch(
+            `/repos/${REPO_OWNER}/${REPO_NAME}/issues/${ISSUE_NUMBER}/labels/${encodeURIComponent(POLISH_LABEL)}`,
+            { method: 'DELETE' },
+        );
+    } catch (err) {
+        console.error(
+            `Failed to remove label "${POLISH_LABEL}" from issue #${ISSUE_NUMBER}: ${
+                err instanceof Error ? err.message : String(err)
+            }`,
+        );
+    }
     console.log(`Successfully polished and closed issue #${ISSUE_NUMBER}`);
 }
 
