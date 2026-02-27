@@ -51,7 +51,12 @@ export async function openAIRequest(
             // レスポンス本文が読めない場合は本文なしでエラーを返す
         }
         const messageBase = `OpenAI API error: ${res.status} ${res.statusText}`;
-        throw new Error(errorBodySnippet !== "" ? `${messageBase} - Body: ${errorBodySnippet}` : messageBase);
+        if (errorBodySnippet) {
+            const openAIErrorDetail = new Error("OpenAI API error response body");
+            (openAIErrorDetail as any).responseBodySnippet = errorBodySnippet;
+            throw new Error(messageBase, { cause: openAIErrorDetail });
+        }
+        throw new Error(messageBase);
     }
 
     const text = await res.text();
