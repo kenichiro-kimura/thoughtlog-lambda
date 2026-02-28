@@ -1,12 +1,12 @@
 import crypto from "crypto";
-import type { Payload, GitHubIssue, CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome } from "../types";
+import type { Payload, GitHubIssue, CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome, VoiceRefineMessage } from "../types";
 import { getDateKeyJst } from "../utils/date";
 import { parseLabels, formatEntry } from "../utils/format";
 import type { IAuthService } from "../interfaces/IAuthService";
 import type { IGitHubService } from "../interfaces/IGitHubService";
 import type { IIdempotencyService } from "../interfaces/IIdempotencyService";
 import type { IThoughtLogService } from "../interfaces/IThoughtLogService";
-import type { ITextRefinerService } from "../interfaces/ITextRefinerService";
+import type { IQueueService } from "../interfaces/IQueueService";
 
 export type { IThoughtLogService };
 export type { CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome };
@@ -27,7 +27,7 @@ export class ThoughtLogService implements IThoughtLogService {
         private readonly github: IGitHubService,
         private readonly idempotency: IIdempotencyService,
         private readonly config: ThoughtLogConfig,
-        private readonly textRefiner?: ITextRefinerService,
+        private readonly queueService?: IQueueService,
     ) {}
 
     async createEntry(payload: Payload): Promise<CreateEntryOutcome> {
@@ -41,19 +41,7 @@ export class ThoughtLogService implements IThoughtLogService {
         const dateKey = getDateKeyJst(payload);
         const labels = parseLabels(this.config.defaultLabels, payload.labels);
 
-        let refinedPayload = payload;
-        console.log("createEntry called with payload:", payload);
-        if (payload.source === "voice") {
-            if (!this.textRefiner) {
-                throw new Error("Text refiner is not configured");
-            }
-            const rawText = (payload.raw ?? "").toString().trim();
-            const refined = await this.textRefiner.refine(rawText);
-            refinedPayload = { ...payload, raw: refined };
-            console.log("Refined text:", refined);
-        }
-
-        const entry = formatEntry(refinedPayload);
+        const entry = formatEntry(payload);
 
         const payloadHash = crypto
             .createHash("sha256")
@@ -78,6 +66,16 @@ export class ThoughtLogService implements IThoughtLogService {
             const comment = await this.github.addComment({
                 owner, repo, issueNumber: issue.number, commentBody: entry, token,
             });
+
+            if (payload.source === "voice" && this.queueService) {
+                const message: VoiceRefineMessage = {
+                    owner,
+                    repo,
+                    issueNumber: issue.number,
+                    commentId: comment.id,
+                };
+                await this.queueService.sendMessage(JSON.stringify(message));
+            }
 
             await this.idempotency.markDone(requestId, {
                 issue_number: issue.number,

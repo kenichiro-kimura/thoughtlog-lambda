@@ -140,3 +140,32 @@ describe("GitHubApiService.getIssue", () => {
         expect(url).toContain("/issues/8");
     });
 });
+
+// ── getComment ─────────────────────────────────────────────────────────────────
+
+describe("GitHubApiService.getComment", () => {
+    it("fetches and returns a single comment", async () => {
+        const comment: GitHubComment = { id: 55, body: "## 10:00\nhello\n" };
+        const http = makeHttp(comment);
+        const svc = new GitHubApiService(http);
+        const result = await svc.getComment({ owner, repo, commentId: 55, token });
+        expect(result).toEqual(comment);
+        const [url] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(url).toContain("/issues/comments/55");
+    });
+});
+
+// ── updateComment ──────────────────────────────────────────────────────────────
+
+describe("GitHubApiService.updateComment", () => {
+    it("patches the comment body and returns the updated comment", async () => {
+        const comment: GitHubComment = { id: 55, body: "## 10:00\nrefined\n" };
+        const http = makeHttp(comment);
+        const svc = new GitHubApiService(http);
+        const result = await svc.updateComment({ owner, repo, commentId: 55, body: "## 10:00\nrefined\n", token });
+        expect(result).toEqual(comment);
+        const [url, opts] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(url).toContain("/issues/comments/55");
+        expect((opts as { method: string }).method).toBe("PATCH");
+    });
+});

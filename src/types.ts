@@ -60,6 +60,14 @@ export type UpdateLogOutcome =
     | { kind: "updated"; date: string; issue_number: number; issue_url: string }
     | { kind: "not_found"; date: string };
 
+/** Message payload sent to the queue for async voice comment refinement. */
+export interface VoiceRefineMessage {
+    owner: string;
+    repo: string;
+    issueNumber: number;
+    commentId: number;
+}
+
 /** Framework-agnostic HTTP response returned by ThoughtLogRouter. */
 export interface HttpResponse {
     statusCode: number;

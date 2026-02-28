@@ -1,9 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigwv2Auth from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as apigwv2Int from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as path from 'path';
 import { execSync } from 'child_process';
@@ -26,8 +28,57 @@ export class ThoughtlogStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // Lambda function (Node.js 24, 1 minute timeout)
+    // SQS queue for async voice comment refinement
+    const voiceQueue = new sqs.Queue(this, 'VoiceRefineQueue', {
+      queueName: 'thoughtlog-voice-refine',
+      visibilityTimeout: cdk.Duration.minutes(5),
+      retentionPeriod: cdk.Duration.days(1),
+    });
+
+    // Shared bundling configuration
     const repoRoot = path.join(__dirname, '../..');
+    const localBundler = {
+      tryBundle(outputDir: string): boolean {
+        try {
+          execSync('npm ci && npm run build', {
+            cwd: repoRoot,
+            stdio: 'inherit',
+          });
+          fs.cpSync(path.join(repoRoot, 'dist'), path.join(outputDir, 'dist'), { recursive: true });
+          fs.copyFileSync(path.join(repoRoot, 'package.json'), path.join(outputDir, 'package.json'));
+          fs.copyFileSync(path.join(repoRoot, 'package-lock.json'), path.join(outputDir, 'package-lock.json'));
+          execSync('npm ci --omit=dev', {
+            cwd: outputDir,
+            stdio: 'inherit',
+          });
+          return true;
+        } catch (e) {
+          console.error('Local bundling failed:', e);
+          return false;
+        }
+      },
+    };
+    const bundlingCommands = [
+      'npm ci',
+      'npm run build',
+      'cp -r dist /asset-output/',
+      'cp package.json package-lock.json /asset-output/',
+      'cd /asset-output',
+      'npm ci --omit=dev',
+    ];
+
+    // Common GitHub/OpenAI environment variables shared between both Lambda functions
+    const sharedEnv: Record<string, string> = {
+      GITHUB_APP_ID: (this.node.tryGetContext('githubAppId') ?? '') as string,
+      GITHUB_INSTALLATION_ID: (this.node.tryGetContext('githubInstallationId') ?? '') as string,
+      GITHUB_OWNER: (this.node.tryGetContext('githubOwner') ?? '') as string,
+      GITHUB_REPO: (this.node.tryGetContext('githubRepo') ?? '') as string,
+      ...(this.node.tryGetContext('defaultLabels')
+        ? { DEFAULT_LABELS: this.node.tryGetContext('defaultLabels') as string }
+        : {}),
+    };
+
+    // HTTP-triggered Lambda function
     const fn = new lambda.Function(this, 'ThoughtlogFunction', {
       // NOTE: The function name is intentionally hardcoded to match the CD workflow's
       // LAMBDA_FUNCTION_NAME secret. This stack is intended for a single deployment
@@ -40,58 +91,49 @@ export class ThoughtlogStack extends cdk.Stack {
       code: lambda.Code.fromAsset(repoRoot, {
         bundling: {
           image: lambda.Runtime.NODEJS_24_X.bundlingImage,
-          command: [
-            'bash', '-c',
-            [
-              'npm ci',
-              'npm run build',
-              'cp -r dist /asset-output/',
-              'cp package.json package-lock.json /asset-output/',
-              'cd /asset-output',
-              'npm ci --omit=dev',
-            ].join(' && '),
-          ],
-          local: {
-            tryBundle(outputDir: string): boolean {
-              try {
-                execSync('npm ci && npm run build', {
-                  cwd: repoRoot,
-                  stdio: 'inherit',
-                });
-                fs.cpSync(path.join(repoRoot, 'dist'), path.join(outputDir, 'dist'), { recursive: true });
-                fs.copyFileSync(path.join(repoRoot, 'package.json'), path.join(outputDir, 'package.json'));
-                fs.copyFileSync(path.join(repoRoot, 'package-lock.json'), path.join(outputDir, 'package-lock.json'));
-                execSync('npm ci --omit=dev', {
-                  cwd: outputDir,
-                  stdio: 'inherit',
-                });
-                return true;
-              } catch (e) {
-                console.error('Local bundling failed:', e);
-                return false;
-              }
-            },
-          },
+          command: ['bash', '-c', bundlingCommands.join(' && ')],
+          local: localBundler,
         },
       }),
       timeout: cdk.Duration.minutes(1),
       environment: {
+        ...sharedEnv,
         IDEMPOTENCY_TABLE: table.tableName,
-        GITHUB_OWNER: (this.node.tryGetContext('githubOwner') ?? '') as string,
-        GITHUB_REPO: (this.node.tryGetContext('githubRepo') ?? '') as string,
-        GITHUB_APP_ID: (this.node.tryGetContext('githubAppId') ?? '') as string,
-        GITHUB_INSTALLATION_ID: (this.node.tryGetContext('githubInstallationId') ?? '') as string,
-        ...(this.node.tryGetContext('defaultLabels')
-          ? { DEFAULT_LABELS: this.node.tryGetContext('defaultLabels') as string }
-          : {}),
+        VOICE_QUEUE_URL: voiceQueue.queueUrl,
         ...(this.node.tryGetContext('idempotencyTtlDays')
           ? { IDEMPOTENCY_TTL_DAYS: this.node.tryGetContext('idempotencyTtlDays') as string }
           : {}),
       },
     });
 
+    // SQS-triggered Lambda function for async voice comment refinement
+    const queueFn = new lambda.Function(this, 'ThoughtlogQueueFunction', {
+      functionName: 'thoughtlog-queue',
+      runtime: lambda.Runtime.NODEJS_24_X,
+      handler: 'dist/queueHandler.handler',
+      code: lambda.Code.fromAsset(repoRoot, {
+        bundling: {
+          image: lambda.Runtime.NODEJS_24_X.bundlingImage,
+          command: ['bash', '-c', bundlingCommands.join(' && ')],
+          local: localBundler,
+        },
+      }),
+      timeout: cdk.Duration.minutes(5),
+      environment: {
+        ...sharedEnv,
+      },
+    });
+
+    // Attach SQS event source to the queue Lambda function
+    queueFn.addEventSource(new lambdaEventSources.SqsEventSource(voiceQueue, {
+      batchSize: 1,
+    }));
+
     // Grant Lambda read/write access to DynamoDB
     table.grantReadWriteData(fn);
+
+    // Grant the HTTP Lambda send access to the voice queue
+    voiceQueue.grantSendMessages(fn);
 
     // GITHUB_PRIVATE_KEY_SECRET_ARN: the Lambda reads the private key from Secrets Manager at runtime.
     // Provide the secret ARN via CDK context: -c githubPrivateKeySecretArn="arn:aws:secretsmanager:..."
@@ -102,6 +144,8 @@ export class ThoughtlogStack extends cdk.Stack {
       );
       fn.addEnvironment('GITHUB_PRIVATE_KEY_SECRET_ARN', privateKeySecretArn);
       privateKeySecret.grantRead(fn);
+      queueFn.addEnvironment('GITHUB_PRIVATE_KEY_SECRET_ARN', privateKeySecretArn);
+      privateKeySecret.grantRead(queueFn);
     }
 
     // EntraID JWT authorizer configuration from CDK context
@@ -152,9 +196,19 @@ export class ThoughtlogStack extends cdk.Stack {
       description: 'Lambda function name',
     });
 
+    new cdk.CfnOutput(this, 'QueueLambdaFunctionName', {
+      value: queueFn.functionName,
+      description: 'Queue-triggered Lambda function name',
+    });
+
     new cdk.CfnOutput(this, 'DynamoDbTableName', {
       value: table.tableName,
       description: 'DynamoDB idempotency table name',
+    });
+
+    new cdk.CfnOutput(this, 'VoiceQueueUrl', {
+      value: voiceQueue.queueUrl,
+      description: 'SQS queue URL for voice comment refinement',
     });
   }
 }

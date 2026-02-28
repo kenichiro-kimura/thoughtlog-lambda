@@ -78,4 +78,18 @@ export class GitHubApiService implements IGitHubService {
             { token },
         ) as GitHubIssue;
     }
+
+    async getComment({ owner, repo, commentId, token }: { owner: string; repo: string; commentId: number; token: string }): Promise<GitHubComment> {
+        return await this.httpClient(
+            `https://api.github.com/repos/${owner}/${repo}/issues/comments/${commentId}`,
+            { token },
+        ) as GitHubComment;
+    }
+
+    async updateComment({ owner, repo, commentId, body, token }: { owner: string; repo: string; commentId: number; body: string; token: string }): Promise<GitHubComment> {
+        return await this.httpClient(
+            `https://api.github.com/repos/${owner}/${repo}/issues/comments/${commentId}`,
+            { method: "PATCH", token, body: { body } },
+        ) as GitHubComment;
+    }
 }
