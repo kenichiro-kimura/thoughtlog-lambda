@@ -3,6 +3,7 @@ import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { githubRequest, openAIRequest } from "./utils/http";
+import { captureAWSv3Client } from "./utils/xray";
 import { GitHubAuthService } from "./services/authService";
 import { GitHubApiService } from "./services/githubService";
 import { DynamoDBIdempotencyService } from "./services/idempotencyService";
@@ -15,10 +16,10 @@ import type { ThoughtLogConfig } from "./services/thoughtLogService";
 
 // Clients are created once at module load to reuse connections across invocations.
 const ddb = DynamoDBDocumentClient.from(
-    new DynamoDBClient({}), { marshallOptions: { removeUndefinedValues: true } },
+    captureAWSv3Client(new DynamoDBClient({})), { marshallOptions: { removeUndefinedValues: true } },
 );
-const secretsClient = new SecretsManagerClient({});
-const sqsClient = new SQSClient({});
+const secretsClient = captureAWSv3Client(new SecretsManagerClient({}));
+const sqsClient = captureAWSv3Client(new SQSClient({}));
 
 export interface ContainerEnv extends ThoughtLogConfig {
     githubAppId: string | undefined;

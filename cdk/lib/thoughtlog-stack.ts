@@ -97,6 +97,7 @@ export class ThoughtlogStack extends cdk.Stack {
       functionName: 'thoughtlog',
       runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'dist/index.handler',
+      tracing: lambda.Tracing.ACTIVE,
       code: lambda.Code.fromAsset(repoRoot, {
         bundling: {
           image: lambda.Runtime.NODEJS_24_X.bundlingImage,
@@ -120,6 +121,7 @@ export class ThoughtlogStack extends cdk.Stack {
       functionName: 'thoughtlog-queue',
       runtime: lambda.Runtime.NODEJS_24_X,
       handler: 'dist/queueHandler.handler',
+      tracing: lambda.Tracing.ACTIVE,
       code: lambda.Code.fromAsset(repoRoot, {
         bundling: {
           image: lambda.Runtime.NODEJS_24_X.bundlingImage,
