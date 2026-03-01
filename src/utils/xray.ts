@@ -20,25 +20,25 @@ export function captureAWSv3Client<T extends object>(client: T): T {
 
 /** AWS X-Ray implementation of ITracingService. */
 export class XRayTracingService implements ITracingService {
-    async withSubsegment<T>(name: string, fn: () => Promise<T>): Promise<T> {
-        let subseg: Subsegment | undefined;
+    async withSpan<T>(name: string, fn: () => Promise<T>): Promise<T> {
+        let subsegment: Subsegment | undefined;
         try {
             const segment = resolveSegment();
             if (segment) {
-                subseg = segment.addNewSubsegment(name);
+                subsegment = segment.addNewSubsegment(name);
             }
         } catch {
             // No X-Ray context available — proceed without tracing.
         }
         try {
             const result = await fn();
-            subseg?.close();
+            subsegment?.close();
             return result;
         } catch (error: unknown) {
-            if (subseg) {
+            if (subsegment) {
                 const err = error instanceof Error ? error : new Error(String(error));
-                subseg.addError(err);
-                subseg.close();
+                subsegment.addError(err);
+                subsegment.close();
             }
             throw error;
         }

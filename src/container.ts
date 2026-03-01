@@ -31,7 +31,7 @@ const tracer: ITracingService = new XRayTracingService();
  * Tracing is applied transparently; the wrapped client behaves identically otherwise.
  */
 function withTracing(name: string, client: HttpClient): HttpClient {
-    return (url, options) => tracer.withSubsegment(name, () => client(url, options));
+    return (url, options) => tracer.withSpan(name, () => client(url, options));
 }
 
 const tracedGithubRequest = withTracing("GitHub API", githubRequest);

@@ -4,8 +4,8 @@
  */
 export interface ITracingService {
     /**
-     * Executes an async function inside a named trace subsegment/span.
+     * Executes an async function inside a named trace span.
      * Implementations must silently no-op when no trace context is active.
      */
-    withSubsegment<T>(name: string, fn: () => Promise<T>): Promise<T>;
+    withSpan<T>(name: string, fn: () => Promise<T>): Promise<T>;
 }
