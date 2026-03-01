@@ -35,9 +35,10 @@ export async function withSubsegment<T>(name: string, fn: () => Promise<T>): Pro
         const result = await fn();
         subseg?.close();
         return result;
-    } catch (error) {
+    } catch (error: unknown) {
         if (subseg) {
-            subseg.addError(error as Error);
+            const err = error instanceof Error ? error : new Error(String(error));
+            subseg.addError(err);
             subseg.close();
         }
         throw error;
