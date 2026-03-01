@@ -41,8 +41,14 @@ jobs:
           role-to-assume: ${{ secrets.ASSUME_ROLE }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Deploy to AWS Lambda
+      - name: Deploy HTTP handler to AWS Lambda
         run: |
           aws lambda update-function-code \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --zip-file fileb://function.zip
+
+      - name: Deploy queue handler to AWS Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ secrets.LAMBDA_QUEUE_FUNCTION_NAME }} \
             --zip-file fileb://function.zip

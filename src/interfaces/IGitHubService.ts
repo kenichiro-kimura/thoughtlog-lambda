@@ -8,4 +8,6 @@ export interface IGitHubService {
     closeIssue(params: { owner: string; repo: string; issueNumber: number; token: string }): Promise<GitHubIssue>;
     getIssueComments(params: { owner: string; repo: string; issueNumber: number; token: string }): Promise<GitHubComment[]>;
     getIssue(params: { owner: string; repo: string; issueNumber: number; token: string }): Promise<GitHubIssue>;
+    getComment(params: { owner: string; repo: string; commentId: number; token: string }): Promise<GitHubComment>;
+    updateComment(params: { owner: string; repo: string; commentId: number; body: string; token: string }): Promise<GitHubComment>;
 }

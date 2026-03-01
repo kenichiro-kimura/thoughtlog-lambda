@@ -3,7 +3,7 @@ import { ThoughtLogService } from "./thoughtLogService";
 import type { IAuthService } from "../interfaces/IAuthService";
 import type { IGitHubService } from "../interfaces/IGitHubService";
 import type { IIdempotencyService } from "../interfaces/IIdempotencyService";
-import type { ITextRefinerService } from "../interfaces/ITextRefinerService";
+import type { IQueueService } from "../interfaces/IQueueService";
 import type { GitHubIssue, GitHubComment } from "../types";
 
 // ── shared test doubles ────────────────────────────────────────────────────────
@@ -24,6 +24,8 @@ function makeGitHub(overrides: Partial<IGitHubService> = {}): IGitHubService {
         closeIssue: vi.fn().mockResolvedValue(mockIssue),
         getIssueComments: vi.fn().mockResolvedValue([mockComment]),
         getIssue: vi.fn().mockResolvedValue(mockIssue),
+        getComment: vi.fn().mockResolvedValue(mockComment),
+        updateComment: vi.fn().mockResolvedValue(mockComment),
         ...overrides,
     };
 }
@@ -37,8 +39,8 @@ function makeIdempotency(overrides: Partial<IIdempotencyService> = {}): IIdempot
     };
 }
 
-function makeTextRefiner(refined = "refined text"): ITextRefinerService {
-    return { refine: vi.fn().mockResolvedValue(refined) };
+function makeQueue(): IQueueService {
+    return { sendMessage: vi.fn().mockResolvedValue(undefined) };
 }
 
 const config = { owner: "owner", repo: "repo", defaultLabels: "thoughtlog" };
@@ -115,26 +117,57 @@ describe("ThoughtLogService.createEntry", () => {
         expect(idempotency.markFailed).toHaveBeenCalledOnce();
     });
 
-    it("refines raw text with textRefiner when source is voice", async () => {
-        const textRefiner = makeTextRefiner("refined text");
-        const svc = new ThoughtLogService(makeAuth(), github, idempotency, config, textRefiner);
+    it("creates entry with raw body when source is voice", async () => {
+        const queue = makeQueue();
+        const svc = new ThoughtLogService(makeAuth(), github, idempotency, config, queue);
         await svc.createEntry({ request_id: "req-voice", raw: "raw voice text", source: "voice" });
-        expect(textRefiner.refine).toHaveBeenCalledWith("raw voice text");
         const addCommentCall = (github.addComment as ReturnType<typeof vi.fn>).mock.calls[0][0];
-        expect(addCommentCall.commentBody).toContain("refined text");
+        expect(addCommentCall.commentBody).toContain("raw voice text");
     });
 
-    it("throws when source is voice but no textRefiner is configured", async () => {
-        await expect(
-            service.createEntry({ request_id: "req-voice-err", raw: "raw voice text", source: "voice" }),
-        ).rejects.toThrow("Text refiner is not configured");
+    it("sends queue message with comment id when source is voice", async () => {
+        const queue = makeQueue();
+        const svc = new ThoughtLogService(makeAuth(), github, idempotency, config, queue);
+        await svc.createEntry({ request_id: "req-voice", raw: "raw voice text", source: "voice" });
+        expect(queue.sendMessage).toHaveBeenCalledOnce();
+        const msg = JSON.parse((queue.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+        expect(msg.commentId).toBe(99);
+        expect(msg.issueNumber).toBe(42);
+        expect(msg.owner).toBe("owner");
+        expect(msg.repo).toBe("repo");
     });
 
-    it("does not call textRefiner when source is not voice", async () => {
-        const textRefiner = makeTextRefiner();
-        const svc = new ThoughtLogService(makeAuth(), github, idempotency, config, textRefiner);
+    it("does not send queue message when source is voice but no queueService is configured", async () => {
+        // No queue service — creates entry with raw body, no error, no queue message
+        const outcome = await service.createEntry({ request_id: "req-voice-noq", raw: "raw voice text", source: "voice" });
+        expect(outcome.kind).toBe("created");
+        const addCommentCall = (github.addComment as ReturnType<typeof vi.fn>).mock.calls[0][0];
+        expect(addCommentCall.commentBody).toContain("raw voice text");
+    });
+
+    it("does not send queue message when source is not voice", async () => {
+        const queue = makeQueue();
+        const svc = new ThoughtLogService(makeAuth(), github, idempotency, config, queue);
         await svc.createEntry({ request_id: "req-normal", raw: "normal text" });
-        expect(textRefiner.refine).not.toHaveBeenCalled();
+        expect(queue.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it("succeeds and calls markDone even when queue send fails", async () => {
+        const queue: IQueueService = { sendMessage: vi.fn().mockRejectedValue(new Error("SQS down")) };
+        const svc = new ThoughtLogService(makeAuth(), github, idempotency, config, queue);
+        const outcome = await svc.createEntry({ request_id: "req-voice-qfail", raw: "raw voice text", source: "voice" });
+        expect(outcome.kind).toBe("created");
+        expect(idempotency.markDone).toHaveBeenCalledOnce();
+        expect(idempotency.markFailed).not.toHaveBeenCalled();
+    });
+
+    it("calls markDone before queue send for voice entries", async () => {
+        const callOrder: string[] = [];
+        (idempotency.markDone as ReturnType<typeof vi.fn>).mockImplementation(async () => { callOrder.push("markDone"); });
+        const queue: IQueueService = { sendMessage: vi.fn().mockImplementation(async () => { callOrder.push("sendMessage"); }) };
+        const svc = new ThoughtLogService(makeAuth(), github, idempotency, config, queue);
+        await svc.createEntry({ request_id: "req-order", raw: "text", source: "voice" });
+        expect(callOrder.indexOf("markDone")).toBeLessThan(callOrder.indexOf("sendMessage"));
     });
 });
 
@@ -180,10 +213,11 @@ describe("ThoughtLogService.updateLog", () => {
         expect(outcome.kind).toBe("not_found");
     });
 
-    it("does not call textRefiner", async () => {
-        const textRefiner = makeTextRefiner();
-        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, textRefiner);
+    it("does not send queue message", async () => {
+        const queue = makeQueue();
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, queue);
         await service.updateLog("2024-01-15", "regular text");
-        expect(textRefiner.refine).not.toHaveBeenCalled();
+        expect(queue.sendMessage).not.toHaveBeenCalled();
     });
 });
+
