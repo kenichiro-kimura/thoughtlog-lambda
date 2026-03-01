@@ -151,6 +151,24 @@ describe("ThoughtLogService.createEntry", () => {
         await svc.createEntry({ request_id: "req-normal", raw: "normal text" });
         expect(queue.sendMessage).not.toHaveBeenCalled();
     });
+
+    it("succeeds and calls markDone even when queue send fails", async () => {
+        const queue: IQueueService = { sendMessage: vi.fn().mockRejectedValue(new Error("SQS down")) };
+        const svc = new ThoughtLogService(makeAuth(), github, idempotency, config, queue);
+        const outcome = await svc.createEntry({ request_id: "req-voice-qfail", raw: "raw voice text", source: "voice" });
+        expect(outcome.kind).toBe("created");
+        expect(idempotency.markDone).toHaveBeenCalledOnce();
+        expect(idempotency.markFailed).not.toHaveBeenCalled();
+    });
+
+    it("calls markDone before queue send for voice entries", async () => {
+        const callOrder: string[] = [];
+        (idempotency.markDone as ReturnType<typeof vi.fn>).mockImplementation(async () => { callOrder.push("markDone"); });
+        const queue: IQueueService = { sendMessage: vi.fn().mockImplementation(async () => { callOrder.push("sendMessage"); }) };
+        const svc = new ThoughtLogService(makeAuth(), github, idempotency, config, queue);
+        await svc.createEntry({ request_id: "req-order", raw: "text", source: "voice" });
+        expect(callOrder.indexOf("markDone")).toBeLessThan(callOrder.indexOf("sendMessage"));
+    });
 });
 
 // ── getLog ─────────────────────────────────────────────────────────────────────

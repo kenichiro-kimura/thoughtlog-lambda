@@ -75,6 +75,12 @@ export function createVoiceCommentRefiner(env: QueueHandlerEnv): VoiceCommentRef
     if (!env.githubPrivateKeySecretArn) {
         throw new Error("Missing env: GITHUB_PRIVATE_KEY_SECRET_ARN");
     }
+    if (!env.githubAppId) {
+        throw new Error("Missing env: GITHUB_APP_ID");
+    }
+    if (!env.githubInstallationId) {
+        throw new Error("Missing env: GITHUB_INSTALLATION_ID");
+    }
     const secretProvider = new SecretsManagerSecretProvider(env.githubPrivateKeySecretArn, secretsClient);
     const auth = new GitHubAuthService(
         env.githubAppId,

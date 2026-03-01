@@ -12,7 +12,15 @@ const refiner = createVoiceCommentRefiner({
 
 export const handler = async (event: SQSEvent): Promise<void> => {
     for (const record of event.Records) {
-        const message = JSON.parse(record.body) as VoiceRefineMessage;
+        let message: VoiceRefineMessage;
+        try {
+            message = JSON.parse(record.body) as VoiceRefineMessage;
+        } catch (error) {
+            const bodyPreview = record.body.slice(0, 100);
+            const errorMessage = `Failed to parse SQS message body as JSON. messageId=${record.messageId}, bodyPreview=${JSON.stringify(bodyPreview)}: ${error instanceof Error ? error.message : String(error)}`;
+            console.error(errorMessage);
+            throw new Error(errorMessage, { cause: error });
+        }
         await refiner.refineComment(message);
     }
 };

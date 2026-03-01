@@ -67,6 +67,12 @@ export class ThoughtLogService implements IThoughtLogService {
                 owner, repo, issueNumber: issue.number, commentBody: entry, token,
             });
 
+            await this.idempotency.markDone(requestId, {
+                issue_number: issue.number,
+                issue_url: issue.html_url!,
+                comment_id: comment.id,
+            });
+
             if (payload.source === "voice" && this.queueService) {
                 const message: VoiceRefineMessage = {
                     owner,
@@ -74,14 +80,12 @@ export class ThoughtLogService implements IThoughtLogService {
                     issueNumber: issue.number,
                     commentId: comment.id,
                 };
-                await this.queueService.sendMessage(JSON.stringify(message));
+                try {
+                    await this.queueService.sendMessage(JSON.stringify(message));
+                } catch (queueError) {
+                    console.error("Failed to send voice refine message to queue:", queueError instanceof Error ? queueError.message : String(queueError));
+                }
             }
-
-            await this.idempotency.markDone(requestId, {
-                issue_number: issue.number,
-                issue_url: issue.html_url!,
-                comment_id: comment.id,
-            });
 
             return {
                 kind: "created",

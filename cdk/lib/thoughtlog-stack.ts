@@ -29,10 +29,19 @@ export class ThoughtlogStack extends cdk.Stack {
     });
 
     // SQS queue for async voice comment refinement
+    const voiceDlq = new sqs.Queue(this, 'VoiceRefineDLQ', {
+      queueName: 'thoughtlog-voice-refine-dlq',
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
     const voiceQueue = new sqs.Queue(this, 'VoiceRefineQueue', {
       queueName: 'thoughtlog-voice-refine',
-      visibilityTimeout: cdk.Duration.minutes(5),
+      visibilityTimeout: cdk.Duration.minutes(7),
       retentionPeriod: cdk.Duration.days(1),
+      deadLetterQueue: {
+        queue: voiceDlq,
+        maxReceiveCount: 5,
+      },
     });
 
     // Shared bundling configuration
