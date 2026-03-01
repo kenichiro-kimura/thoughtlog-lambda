@@ -3,7 +3,9 @@ import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { githubRequest, openAIRequest } from "./utils/http";
-import { captureAWSv3Client } from "./utils/xray";
+import type { HttpClient } from "./utils/http";
+import { captureAWSv3Client, XRayTracingService } from "./utils/xray";
+import type { ITracingService } from "./interfaces/ITracingService";
 import { GitHubAuthService } from "./services/authService";
 import { GitHubApiService } from "./services/githubService";
 import { DynamoDBIdempotencyService } from "./services/idempotencyService";
@@ -20,6 +22,20 @@ const ddb = DynamoDBDocumentClient.from(
 );
 const secretsClient = captureAWSv3Client(new SecretsManagerClient({}));
 const sqsClient = captureAWSv3Client(new SQSClient({}));
+
+// Tracer is created once and shared across all wired services.
+const tracer: ITracingService = new XRayTracingService();
+
+/**
+ * Wraps an HttpClient so every call is recorded as a named trace subsegment.
+ * Tracing is applied transparently; the wrapped client behaves identically otherwise.
+ */
+function withTracing(name: string, client: HttpClient): HttpClient {
+    return (url, options) => tracer.withSubsegment(name, () => client(url, options));
+}
+
+const tracedGithubRequest = withTracing("GitHub API", githubRequest);
+const tracedOpenAIRequest = withTracing("OpenAI", openAIRequest);
 
 export interface ContainerEnv extends ThoughtLogConfig {
     githubAppId: string | undefined;
@@ -45,9 +61,9 @@ export function createThoughtLogService(env: ContainerEnv): ThoughtLogService {
         env.githubAppId,
         env.githubInstallationId,
         secretProvider,
-        githubRequest,
+        tracedGithubRequest,
     );
-    const github = new GitHubApiService(githubRequest);
+    const github = new GitHubApiService(tracedGithubRequest);
     const idempotency = new DynamoDBIdempotencyService(ddb, env.idempotencyTable, env.idempotencyTtlDays);
 
     const queueService = env.voiceQueueUrl
@@ -87,12 +103,12 @@ export function createVoiceCommentRefiner(env: QueueHandlerEnv): VoiceCommentRef
         env.githubAppId,
         env.githubInstallationId,
         secretProvider,
-        githubRequest,
+        tracedGithubRequest,
     );
-    const github = new GitHubApiService(githubRequest);
+    const github = new GitHubApiService(tracedGithubRequest);
     const textRefiner = new OpenAITextRefinerService(
         secretProvider,
-        openAIRequest,
+        tracedOpenAIRequest,
         env.openAiModel,
         env.openAiSystemPrompt,
     );
