@@ -56,11 +56,18 @@ export class ThoughtLogService implements IThoughtLogService {
         try {
             const token = await this.auth.getInstallationToken();
 
-            let issue: GitHubIssue | null = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
-            if (!issue) {
-                issue = await this.github.createDailyIssue({ owner, repo, dateKey, labels, token });
-            } else if (!issue.html_url) {
-                issue = await this.github.getIssue({ owner, repo, issueNumber: issue.number, token });
+            const cachedIssueNumber = await this.idempotency.getIssueNumberByTitle(dateKey);
+            let issue: GitHubIssue;
+            if (cachedIssueNumber !== null) {
+                issue = await this.github.getIssue({ owner, repo, issueNumber: cachedIssueNumber, token });
+            } else {
+                const found = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
+                if (found) {
+                    issue = found.html_url ? found : await this.github.getIssue({ owner, repo, issueNumber: found.number, token });
+                } else {
+                    issue = await this.github.createDailyIssue({ owner, repo, dateKey, labels, token });
+                }
+                await this.idempotency.putIssueTitleCache(dateKey, issue.number);
             }
 
             const comment = await this.github.addComment({
