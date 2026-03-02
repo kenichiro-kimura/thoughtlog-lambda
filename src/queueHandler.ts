@@ -28,8 +28,11 @@ export const handler = async (event: SQSEvent): Promise<void> => {
         }
         if (message.type === "finalize") {
             await finalizer.finalize(message);
-        } else {
+        } else if (message.type === "voice-polish") {
             await refiner.refineComment(message);
+        } else {
+            const unknownType = (message as { type?: unknown }).type;
+            console.warn(`Unknown SQS message type: ${JSON.stringify(unknownType)}. messageId=${record.messageId}`);
         }
     }
 };

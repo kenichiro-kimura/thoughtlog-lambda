@@ -53,7 +53,7 @@ export class IssueFinalizeService {
             );
         }
 
-        if (!result.title || !result.body) {
+        if (typeof result.title !== "string" || typeof result.body !== "string" || !result.title.trim() || !result.body.trim()) {
             throw new Error("OpenAI response missing required fields: title, body");
         }
 
