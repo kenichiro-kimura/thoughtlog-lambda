@@ -2,6 +2,7 @@ import type { IAuthService } from "../interfaces/IAuthService";
 import type { IGitHubService } from "../interfaces/IGitHubService";
 import type { ITextRefinerService } from "../interfaces/ITextRefinerService";
 import type { FinalizeMessage } from "../types";
+import { nowJstDateTime } from "../utils/date";
 
 /**
  * Appended to the user-supplied system prompt so that OpenAI always returns
@@ -55,6 +56,7 @@ export class IssueFinalizeService {
         const title = result.title.startsWith(dateKey) ? result.title : `${dateKey} ${result.title}`;
 
         await this.github.updateIssue({ owner, repo, issueNumber, title, body: result.body, token });
+        await this.github.addComment({ owner, repo, issueNumber, commentBody: `finalizeしました(${nowJstDateTime()})`, token });
         await this.github.closeIssue({ owner, repo, issueNumber, token });
     }
 }

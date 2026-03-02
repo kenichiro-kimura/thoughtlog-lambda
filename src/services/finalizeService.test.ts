@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { IssueFinalizeService, FINALIZE_JSON_FORMAT_APPENDIX } from "./finalizeService";
 import type { IAuthService } from "../interfaces/IAuthService";
 import type { IGitHubService } from "../interfaces/IGitHubService";
@@ -50,6 +50,10 @@ const message: FinalizeMessage = {
 // ── IssueFinalizeService ───────────────────────────────────────────────────────
 
 describe("IssueFinalizeService.finalize", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it("fetches comments, calls refiner, updates and closes the issue", async () => {
         const github = makeGitHub();
         const textRefiner = makeTextRefiner();
@@ -63,9 +67,22 @@ describe("IssueFinalizeService.finalize", () => {
         });
         expect(textRefiner.refine).toHaveBeenCalledOnce();
         expect(github.updateIssue).toHaveBeenCalledOnce();
+        expect(github.addComment).toHaveBeenCalledOnce();
         expect(github.closeIssue).toHaveBeenCalledWith({
             owner: "owner", repo: "repo", issueNumber: 10, token: "tok",
         });
+    });
+
+    it("posts a finalize comment with JST datetime before closing", async () => {
+        vi.spyOn(Date, "now").mockReturnValue(new Date("2024-03-01T10:00:00Z").getTime());
+        const github = makeGitHub();
+        const svc = new IssueFinalizeService(makeAuth(), github, makeTextRefiner());
+
+        await svc.finalize(message);
+
+        const addCommentCall = (github.addComment as ReturnType<typeof vi.fn>).mock.calls[0][0];
+        expect(addCommentCall.commentBody).toBe("finalizeしました(2024-03-01 19:00)");
+        expect(github.addComment).toHaveBeenCalledBefore(github.closeIssue as ReturnType<typeof vi.fn>);
     });
 
     it("prepends dateKey to title when not already present", async () => {
