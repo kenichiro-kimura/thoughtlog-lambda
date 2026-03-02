@@ -35,6 +35,8 @@ function makeIdempotency(overrides: Partial<IIdempotencyService> = {}): IIdempot
         claim: vi.fn().mockResolvedValue({ enabled: false, claimed: true }),
         markDone: vi.fn().mockResolvedValue(undefined),
         markFailed: vi.fn().mockResolvedValue(undefined),
+        getIssueNumberByTitle: vi.fn().mockResolvedValue(null),
+        putIssueTitleCache: vi.fn().mockResolvedValue(undefined),
         ...overrides,
     };
 }
@@ -89,6 +91,43 @@ describe("ThoughtLogService.createEntry", () => {
         const outcome = await service.createEntry({ request_id: "req-2", raw: "new", captured_at: "2024-01-15T10:30:00Z" });
         expect(outcome.kind).toBe("created");
         expect(github.createDailyIssue).toHaveBeenCalledOnce();
+    });
+
+    it("uses cached issue number from DynamoDB when available, skipping GitHub search", async () => {
+        (idempotency.getIssueNumberByTitle as ReturnType<typeof vi.fn>).mockResolvedValue(42);
+        const outcome = await service.createEntry({ request_id: "req-cached", raw: "hello", captured_at: "2024-01-15T10:30:00Z" });
+        expect(outcome.kind).toBe("created");
+        expect(github.findDailyIssue).not.toHaveBeenCalled();
+        expect(github.getIssue).toHaveBeenCalledOnce();
+        expect(github.addComment).toHaveBeenCalledOnce();
+    });
+
+    it("does not call putIssueTitleCache when cache hit", async () => {
+        (idempotency.getIssueNumberByTitle as ReturnType<typeof vi.fn>).mockResolvedValue(42);
+        await service.createEntry({ request_id: "req-cached2", raw: "hello", captured_at: "2024-01-15T10:30:00Z" });
+        expect(idempotency.putIssueTitleCache).not.toHaveBeenCalled();
+    });
+
+    it("saves issue to cache after finding via GitHub search", async () => {
+        await service.createEntry({ request_id: "req-save-cache", raw: "hello", captured_at: "2024-01-15T10:30:00Z" });
+        expect(idempotency.putIssueTitleCache).toHaveBeenCalledOnce();
+        const [, issueNumber] = (idempotency.putIssueTitleCache as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(issueNumber).toBe(42);
+    });
+
+    it("saves issue to cache after finding via GitHub search with correct title", async () => {
+        await service.createEntry({ request_id: "req-save-cache-title", raw: "hello", captured_at: "2024-01-15T10:30:00Z" });
+        expect(idempotency.putIssueTitleCache).toHaveBeenCalledOnce();
+        const [title] = (idempotency.putIssueTitleCache as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(title).toContain("2024-01-15");
+    });
+
+    it("saves issue to cache after creating a new issue", async () => {
+        (github.findDailyIssue as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+        await service.createEntry({ request_id: "req-create-cache", raw: "new", captured_at: "2024-01-15T10:30:00Z" });
+        expect(idempotency.putIssueTitleCache).toHaveBeenCalledOnce();
+        const [, issueNumber] = (idempotency.putIssueTitleCache as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(issueNumber).toBe(42);
     });
 
     it("returns idempotent outcome when claim is not claimed", async () => {
