@@ -67,21 +67,22 @@ describe("IssueFinalizeService.finalize", () => {
         });
         expect(textRefiner.refine).toHaveBeenCalledOnce();
         expect(github.updateIssue).toHaveBeenCalledOnce();
-        expect(github.addComment).toHaveBeenCalledOnce();
+        expect(github.addComment).toHaveBeenCalledTimes(2);
         expect(github.closeIssue).toHaveBeenCalledWith({
             owner: "owner", repo: "repo", issueNumber: 10, token: "tok",
         });
     });
 
-    it("posts a finalize comment with JST datetime before closing", async () => {
+    it("posts a content comment then a finalize datetime comment before closing", async () => {
         vi.spyOn(Date, "now").mockReturnValue(new Date("2024-03-01T10:00:00Z").getTime());
         const github = makeGitHub();
         const svc = new IssueFinalizeService(makeAuth(), github, makeTextRefiner());
 
         await svc.finalize(message);
 
-        const addCommentCall = (github.addComment as ReturnType<typeof vi.fn>).mock.calls[0][0];
-        expect(addCommentCall.commentBody).toBe("finalizeしました(2024-03-01 19:00)");
+        const calls = (github.addComment as ReturnType<typeof vi.fn>).mock.calls;
+        expect(calls[0][0].commentBody).toBe("# 2024-03-01 Daily summary\n\n# Summary\n\nAll thoughts.");
+        expect(calls[1][0].commentBody).toBe("finalizeしました(2024-03-01 19:00)");
         expect(github.addComment).toHaveBeenCalledBefore(github.closeIssue as ReturnType<typeof vi.fn>);
     });
 
