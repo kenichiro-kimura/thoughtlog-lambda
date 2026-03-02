@@ -30,7 +30,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_PROMPT: ${{ secrets.OPENAI_PROMPT }}
+          OPENAI_PROMPT: ${{ vars.OPENAI_PROMPT }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPO_OWNER: ${{ github.repository_owner }}
