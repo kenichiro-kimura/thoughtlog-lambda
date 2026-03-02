@@ -57,16 +57,30 @@ export type GetLogOutcome =
     | { kind: "not_found"; date: string };
 
 export type UpdateLogOutcome =
-    | { kind: "updated"; date: string; issue_number: number; issue_url: string }
+    | { kind: "queued"; date: string }
     | { kind: "not_found"; date: string };
 
 /** Message payload sent to the queue for async voice comment refinement. */
 export interface VoiceRefineMessage {
+    type: "voice-polish";
     owner: string;
     repo: string;
     issueNumber: number;
     commentId: number;
 }
+
+/** Message payload sent to the queue for async final polish of a daily log. */
+export interface FinalizeMessage {
+    type: "finalize";
+    owner: string;
+    repo: string;
+    dateKey: string;
+    labels: string[];
+    issueNumber: number;
+}
+
+/** Union of all SQS message types handled by the queue handler. */
+export type SqsMessage = VoiceRefineMessage | FinalizeMessage;
 
 /** Framework-agnostic HTTP response returned by ThoughtLogRouter. */
 export interface HttpResponse {

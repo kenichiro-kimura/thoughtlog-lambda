@@ -78,6 +78,26 @@ describe("GitHubApiService.updateIssue", () => {
         const [, opts] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
         expect((opts as { method: string }).method).toBe("PATCH");
     });
+
+    it("includes title in PATCH body when title is provided", async () => {
+        const issue: GitHubIssue = { number: 3 };
+        const http = makeHttp(issue);
+        const svc = new GitHubApiService(http);
+        await svc.updateIssue({ owner, repo, issueNumber: 3, title: "New Title", body: "new body", token });
+        const [, opts] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect((opts as { body: Record<string, unknown> }).body.title).toBe("New Title");
+        expect((opts as { body: Record<string, unknown> }).body.body).toBe("new body");
+    });
+
+    it("does not include title in PATCH body when title is omitted", async () => {
+        const issue: GitHubIssue = { number: 3 };
+        const http = makeHttp(issue);
+        const svc = new GitHubApiService(http);
+        await svc.updateIssue({ owner, repo, issueNumber: 3, body: "new body", token });
+        const [, opts] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect((opts as { body: Record<string, unknown> }).body).not.toHaveProperty("title");
+        expect((opts as { body: Record<string, unknown> }).body.body).toBe("new body");
+    });
 });
 
 // ── closeIssue ─────────────────────────────────────────────────────────────────

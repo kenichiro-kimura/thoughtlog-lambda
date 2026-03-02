@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Payload, GitHubIssue, CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome, VoiceRefineMessage } from "../types";
+import type { Payload, GitHubIssue, CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome, VoiceRefineMessage, FinalizeMessage } from "../types";
 import { getDateKeyJst } from "../utils/date";
 import { parseLabels, formatEntry } from "../utils/format";
 import type { IAuthService } from "../interfaces/IAuthService";
@@ -82,6 +82,7 @@ export class ThoughtLogService implements IThoughtLogService {
 
             if (payload.source === "voice" && this.queueService) {
                 const message: VoiceRefineMessage = {
+                    type: "voice-polish",
                     owner,
                     repo,
                     issueNumber: issue.number,
@@ -119,7 +120,10 @@ export class ThoughtLogService implements IThoughtLogService {
         return { kind: "found", body: comments.map((c) => c.body || "").join("\n") };
     }
 
-    async updateLog(dateKey: string, newBody: string): Promise<UpdateLogOutcome> {
+    async updateLog(dateKey: string): Promise<UpdateLogOutcome> {
+        if (!this.queueService) {
+            throw new Error("Queue service not configured for finalize");
+        }
         const { owner, repo } = this.config;
         const token = await this.auth.getInstallationToken();
         const labels = parseLabels(this.config.defaultLabels, []);
@@ -127,16 +131,15 @@ export class ThoughtLogService implements IThoughtLogService {
         const issue = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
         if (!issue) return { kind: "not_found", date: dateKey };
 
-        const bodyToUpdate = newBody;
-
-        await this.github.updateIssue({ owner, repo, issueNumber: issue.number, body: bodyToUpdate, token });
-        const closed = await this.github.closeIssue({ owner, repo, issueNumber: issue.number, token });
-
-        return {
-            kind: "updated",
-            date: dateKey,
-            issue_number: closed.number,
-            issue_url: closed.html_url!,
+        const message: FinalizeMessage = {
+            type: "finalize",
+            owner,
+            repo,
+            dateKey,
+            labels,
+            issueNumber: issue.number,
         };
+        await this.queueService.sendMessage(JSON.stringify(message));
+        return { kind: "queued", date: dateKey };
     }
 }
