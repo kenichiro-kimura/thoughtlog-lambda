@@ -30,15 +30,10 @@ export class IssueFinalizeService {
     ) {}
 
     async finalize(message: FinalizeMessage): Promise<void> {
-        const { owner, repo, dateKey, labels } = message;
+        const { owner, repo, dateKey, issueNumber } = message;
         const token = await this.auth.getInstallationToken();
 
-        const issue = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
-        if (!issue) {
-            throw new Error(`No issue found for date: ${dateKey}`);
-        }
-
-        const comments = await this.github.getIssueComments({ owner, repo, issueNumber: issue.number, token });
+        const comments = await this.github.getIssueComments({ owner, repo, issueNumber, token });
         const combined = comments.map((c) => c.body ?? "").join("\n\n");
 
         const refined = await this.textRefiner.refine(combined);
@@ -59,6 +54,6 @@ export class IssueFinalizeService {
 
         const title = result.title.startsWith(dateKey) ? result.title : `${dateKey} ${result.title}`;
 
-        await this.github.updateIssue({ owner, repo, issueNumber: issue.number, title, body: result.body, token });
+        await this.github.updateIssue({ owner, repo, issueNumber, title, body: result.body, token });
     }
 }

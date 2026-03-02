@@ -202,6 +202,15 @@ describe("ThoughtLogService.updateLog", () => {
         await expect(service.updateLog("2024-01-15")).rejects.toThrow("Queue service not configured for finalize");
     });
 
+    it("returns not_found when no issue exists for the date", async () => {
+        const queue = makeQueue();
+        const github = makeGitHub({ findDailyIssue: vi.fn().mockResolvedValue(null) });
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config, queue);
+        const outcome = await service.updateLog("2024-01-15");
+        expect(outcome.kind).toBe("not_found");
+        expect(queue.sendMessage).not.toHaveBeenCalled();
+    });
+
     it("enqueues a finalize message and returns queued outcome", async () => {
         const queue = makeQueue();
         const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, queue);
@@ -213,7 +222,7 @@ describe("ThoughtLogService.updateLog", () => {
         expect(queue.sendMessage).toHaveBeenCalledOnce();
     });
 
-    it("sends a finalize message with correct fields", async () => {
+    it("sends a finalize message with correct fields including issueNumber", async () => {
         const queue = makeQueue();
         const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, queue);
         await service.updateLog("2024-01-15");
@@ -222,6 +231,7 @@ describe("ThoughtLogService.updateLog", () => {
         expect(msg.owner).toBe("owner");
         expect(msg.repo).toBe("repo");
         expect(msg.dateKey).toBe("2024-01-15");
+        expect(msg.issueNumber).toBe(42);
         expect(Array.isArray(msg.labels)).toBe(true);
     });
 });

@@ -76,6 +76,7 @@ export interface FinalizeMessage {
     repo: string;
     dateKey: string;
     labels: string[];
+    issueNumber: number;
 }
 
 /** Union of all SQS message types handled by the queue handler. */

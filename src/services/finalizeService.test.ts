@@ -44,6 +44,7 @@ const message: FinalizeMessage = {
     repo: "repo",
     dateKey: "2024-03-01",
     labels: ["thoughtlog"],
+    issueNumber: 10,
 };
 
 // ── IssueFinalizeService ───────────────────────────────────────────────────────
@@ -56,9 +57,7 @@ describe("IssueFinalizeService.finalize", () => {
 
         await svc.finalize(message);
 
-        expect(github.findDailyIssue).toHaveBeenCalledWith({
-            owner: "owner", repo: "repo", dateKey: "2024-03-01", labels: ["thoughtlog"], token: "tok",
-        });
+        expect(github.findDailyIssue).not.toHaveBeenCalled();
         expect(github.getIssueComments).toHaveBeenCalledWith({
             owner: "owner", repo: "repo", issueNumber: 10, token: "tok",
         });
@@ -112,13 +111,6 @@ describe("IssueFinalizeService.finalize", () => {
 
         const refineArg = (textRefiner.refine as ReturnType<typeof vi.fn>).mock.calls[0][0];
         expect(refineArg).toBe("");
-    });
-
-    it("throws when no issue is found for the date", async () => {
-        const github = makeGitHub({ findDailyIssue: vi.fn().mockResolvedValue(null) });
-        const svc = new IssueFinalizeService(makeAuth(), github, makeTextRefiner());
-
-        await expect(svc.finalize(message)).rejects.toThrow("No issue found for date: 2024-03-01");
     });
 
     it("throws when OpenAI response is not valid JSON", async () => {
