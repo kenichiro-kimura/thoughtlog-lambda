@@ -28,10 +28,8 @@ function makeService(overrides: Partial<IThoughtLogService> = {}): IThoughtLogSe
         }),
         getLog: vi.fn().mockResolvedValue({ kind: "found", body: "## 19:30\nhello\n" }),
         updateLog: vi.fn().mockResolvedValue({
-            kind: "updated",
+            kind: "queued",
             date: "2024-01-15",
-            issue_number: 42,
-            issue_url: "https://github.com/owner/repo/issues/42",
         }),
         ...overrides,
     } as IThoughtLogService;
@@ -104,15 +102,15 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
         router = new ThoughtLogRouter(service);
     });
 
-    it("returns 200 with updated info on success", async () => {
+    it("returns 202 with queued info on success", async () => {
+        service.updateLog = vi.fn().mockResolvedValue({ kind: "queued", date: "2024-01-15" });
         const request = makeRequest({
             getMethod: vi.fn().mockReturnValue("PUT"),
             getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue('{"raw":"summary text"}'),
         });
         const response = await router.handle(request);
-        expect(response.statusCode).toBe(200);
-        expect(JSON.parse(response.body)).toMatchObject({ ok: true, issue_number: 42 });
+        expect(response.statusCode).toBe(202);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: true, queued: true, date: "2024-01-15" });
     });
 
     it("returns 404 when issue does not exist", async () => {
@@ -120,32 +118,9 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
         const request = makeRequest({
             getMethod: vi.fn().mockReturnValue("PUT"),
             getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue('{"raw":"text"}'),
         });
         const response = await router.handle(request);
         expect(response.statusCode).toBe(404);
-    });
-
-    it("returns 400 on invalid JSON body", async () => {
-        const request = makeRequest({
-            getMethod: vi.fn().mockReturnValue("PUT"),
-            getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue("{bad json"),
-        });
-        const response = await router.handle(request);
-        expect(response.statusCode).toBe(400);
-        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "invalid_json" });
-    });
-
-    it("returns 400 when raw body is empty", async () => {
-        const request = makeRequest({
-            getMethod: vi.fn().mockReturnValue("PUT"),
-            getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue('{"raw":"   "}'),
-        });
-        const response = await router.handle(request);
-        expect(response.statusCode).toBe(400);
-        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "missing_body" });
     });
 
     it("returns 500 when updateLog throws", async () => {
@@ -153,7 +128,6 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
         const request = makeRequest({
             getMethod: vi.fn().mockReturnValue("PUT"),
             getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue('{"raw":"text"}'),
         });
         const response = await router.handle(request);
         expect(response.statusCode).toBe(500);
@@ -164,21 +138,20 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
         const request = makeRequest({
             getMethod: vi.fn().mockReturnValue("PUT"),
             getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue('{"raw":"text"}'),
         });
         const response = await router.handle(request);
         expect(response.statusCode).toBe(500);
         expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "plain string error" });
     });
 
-    it("calls updateLog with dateKey and body", async () => {
+    it("calls updateLog with only the dateKey (no body required)", async () => {
+        service.updateLog = vi.fn().mockResolvedValue({ kind: "queued", date: "2024-01-15" });
         const request = makeRequest({
             getMethod: vi.fn().mockReturnValue("PUT"),
             getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue('{"raw":"summary text"}'),
         });
         await router.handle(request);
-        expect(service.updateLog).toHaveBeenCalledWith("2024-01-15", "summary text");
+        expect(service.updateLog).toHaveBeenCalledWith("2024-01-15");
     });
 });
 

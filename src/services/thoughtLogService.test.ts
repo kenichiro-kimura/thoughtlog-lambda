@@ -197,27 +197,32 @@ describe("ThoughtLogService.getLog", () => {
 // ── updateLog ──────────────────────────────────────────────────────────────────
 
 describe("ThoughtLogService.updateLog", () => {
-    it("updates and closes issue, returning updated outcome", async () => {
+    it("throws when no queue service is configured", async () => {
         const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config);
-        const outcome = await service.updateLog("2024-01-15", "summary text");
-        expect(outcome.kind).toBe("updated");
-        if (outcome.kind === "updated") {
-            expect(outcome.issue_number).toBe(42);
-        }
+        await expect(service.updateLog("2024-01-15")).rejects.toThrow("Queue service not configured for finalize");
     });
 
-    it("returns not_found outcome when no issue exists", async () => {
-        const github = makeGitHub({ findDailyIssue: vi.fn().mockResolvedValue(null) });
-        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
-        const outcome = await service.updateLog("2024-01-15", "text");
-        expect(outcome.kind).toBe("not_found");
-    });
-
-    it("does not send queue message", async () => {
+    it("enqueues a finalize message and returns queued outcome", async () => {
         const queue = makeQueue();
         const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, queue);
-        await service.updateLog("2024-01-15", "regular text");
-        expect(queue.sendMessage).not.toHaveBeenCalled();
+        const outcome = await service.updateLog("2024-01-15");
+        expect(outcome.kind).toBe("queued");
+        if (outcome.kind === "queued") {
+            expect(outcome.date).toBe("2024-01-15");
+        }
+        expect(queue.sendMessage).toHaveBeenCalledOnce();
+    });
+
+    it("sends a finalize message with correct fields", async () => {
+        const queue = makeQueue();
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, queue);
+        await service.updateLog("2024-01-15");
+        const msg = JSON.parse((queue.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+        expect(msg.type).toBe("finalize");
+        expect(msg.owner).toBe("owner");
+        expect(msg.repo).toBe("repo");
+        expect(msg.dateKey).toBe("2024-01-15");
+        expect(Array.isArray(msg.labels)).toBe(true);
     });
 });
 

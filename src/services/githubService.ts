@@ -44,10 +44,12 @@ export class GitHubApiService implements IGitHubService {
         ) as GitHubComment;
     }
 
-    async updateIssue({ owner, repo, issueNumber, body, token }: { owner: string; repo: string; issueNumber: number; body: string; token: string }): Promise<GitHubIssue> {
+    async updateIssue({ owner, repo, issueNumber, title, body, token }: { owner: string; repo: string; issueNumber: number; title?: string; body: string; token: string }): Promise<GitHubIssue> {
+        const patchBody: Record<string, unknown> = { body };
+        if (title !== undefined) patchBody.title = title;
         return await this.httpClient(
             `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`,
-            { method: "PATCH", token, body: { body } },
+            { method: "PATCH", token, body: patchBody },
         ) as GitHubIssue;
     }
 

@@ -14,6 +14,7 @@ import { OpenAITextRefinerService } from "./services/openAIService";
 import { SqsQueueService } from "./services/sqsService";
 import { ThoughtLogService } from "./services/thoughtLogService";
 import { VoiceCommentRefinerService } from "./services/voiceCommentRefiner";
+import { IssueFinalizeService, FINALIZE_JSON_FORMAT_APPENDIX } from "./services/finalizeService";
 import type { ThoughtLogConfig } from "./services/thoughtLogService";
 
 // Clients are created once at module load to reuse connections across invocations.
@@ -83,6 +84,8 @@ export interface QueueHandlerEnv {
     githubPrivateKeySecretArn: string | undefined;
     openAiModel: string | undefined;
     openAiSystemPrompt: string | undefined;
+    finalizeOpenAiModel: string | undefined;
+    finalizeOpenAiSystemPrompt: string | undefined;
 }
 
 /**
@@ -113,4 +116,35 @@ export function createVoiceCommentRefiner(env: QueueHandlerEnv): VoiceCommentRef
         env.openAiSystemPrompt,
     );
     return new VoiceCommentRefinerService(auth, github, textRefiner);
+}
+
+/**
+ * Wires up the IssueFinalizeService for the SQS queue handler.
+ */
+export function createFinalizeService(env: QueueHandlerEnv): IssueFinalizeService {
+    if (!env.githubPrivateKeySecretArn) {
+        throw new Error("Missing env: GITHUB_PRIVATE_KEY_SECRET_ARN");
+    }
+    if (!env.githubAppId) {
+        throw new Error("Missing env: GITHUB_APP_ID");
+    }
+    if (!env.githubInstallationId) {
+        throw new Error("Missing env: GITHUB_INSTALLATION_ID");
+    }
+    const secretProvider = new SecretsManagerSecretProvider(env.githubPrivateKeySecretArn, secretsClient);
+    const auth = new GitHubAuthService(
+        env.githubAppId,
+        env.githubInstallationId,
+        secretProvider,
+        tracedGithubRequest,
+    );
+    const github = new GitHubApiService(tracedGithubRequest);
+    const finalizeSystemPrompt = (env.finalizeOpenAiSystemPrompt ?? "") + FINALIZE_JSON_FORMAT_APPENDIX;
+    const textRefiner = new OpenAITextRefinerService(
+        secretProvider,
+        tracedOpenAIRequest,
+        env.finalizeOpenAiModel,
+        finalizeSystemPrompt,
+    );
+    return new IssueFinalizeService(auth, github, textRefiner);
 }

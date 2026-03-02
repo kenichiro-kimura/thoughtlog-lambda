@@ -132,6 +132,18 @@ export class ThoughtlogStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       environment: {
         ...sharedEnv,
+        ...(this.node.tryGetContext('openAiModel')
+          ? { OPENAI_MODEL: this.node.tryGetContext('openAiModel') as string }
+          : {}),
+        ...(this.node.tryGetContext('openAiSystemPrompt')
+          ? { OPENAI_SYSTEM_PROMPT: this.node.tryGetContext('openAiSystemPrompt') as string }
+          : {}),
+        ...(this.node.tryGetContext('finalizeOpenAiModel')
+          ? { FINALIZE_OPENAI_MODEL: this.node.tryGetContext('finalizeOpenAiModel') as string }
+          : {}),
+        ...(this.node.tryGetContext('finalizeOpenAiSystemPrompt')
+          ? { FINALIZE_OPENAI_SYSTEM_PROMPT: this.node.tryGetContext('finalizeOpenAiSystemPrompt') as string }
+          : {}),
       },
     });
 
