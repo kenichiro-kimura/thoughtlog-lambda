@@ -50,7 +50,7 @@ const message: FinalizeMessage = {
 // ── IssueFinalizeService ───────────────────────────────────────────────────────
 
 describe("IssueFinalizeService.finalize", () => {
-    it("fetches comments, calls refiner, and updates the issue", async () => {
+    it("fetches comments, calls refiner, updates and closes the issue", async () => {
         const github = makeGitHub();
         const textRefiner = makeTextRefiner();
         const svc = new IssueFinalizeService(makeAuth(), github, textRefiner);
@@ -63,6 +63,9 @@ describe("IssueFinalizeService.finalize", () => {
         });
         expect(textRefiner.refine).toHaveBeenCalledOnce();
         expect(github.updateIssue).toHaveBeenCalledOnce();
+        expect(github.closeIssue).toHaveBeenCalledWith({
+            owner: "owner", repo: "repo", issueNumber: 10, token: "tok",
+        });
     });
 
     it("prepends dateKey to title when not already present", async () => {
