@@ -40,7 +40,13 @@ export const handler = async (event: SQSEvent): Promise<void> => {
         } else if (message.type === "voice-polish") {
             await refiner.refineComment(message);
         } else if (message.type === "create-entry") {
-            await thoughtLog.createEntry(message.payload);
+            const result = await thoughtLog.createEntry(message.payload);
+
+            if (result?.kind === "idempotent" && result?.body?.status === "failed") {
+                const errorMessage = `Idempotent create-entry is in failed state. messageId=${record.messageId}`;
+                console.error(errorMessage, { result });
+                throw new Error(errorMessage);
+            }
         } else {
             const unknownType = (message as { type?: unknown }).type;
             console.warn(`Unknown SQS message type: ${JSON.stringify(unknownType)}. messageId=${record.messageId}`);
