@@ -83,7 +83,9 @@ describe("IssueFinalizeService.finalize", () => {
         const calls = (github.addComment as ReturnType<typeof vi.fn>).mock.calls;
         expect(calls[0][0].commentBody).toBe("# 2024-03-01 Daily summary\n\n# Summary\n\nAll thoughts.");
         expect(calls[1][0].commentBody).toBe("finalizeしました(2024-03-01 19:00)");
-        expect(github.addComment).toHaveBeenCalledBefore(github.closeIssue as ReturnType<typeof vi.fn>);
+        const addCommentOrder = (github.addComment as ReturnType<typeof vi.fn>).mock.invocationCallOrder;
+        const closeIssueOrder = (github.closeIssue as ReturnType<typeof vi.fn>).mock.invocationCallOrder;
+        expect(Math.max(...addCommentOrder)).toBeLessThan(Math.min(...closeIssueOrder));
     });
 
     it("prepends dateKey to title when not already present", async () => {

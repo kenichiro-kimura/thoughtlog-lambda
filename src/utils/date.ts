@@ -8,7 +8,7 @@ export function nowEpoch(): number {
 }
 
 /**
- * Returns the current date and time in JST (UTC+9) as a "YYYY-MM-DD HH:MM" string.
+ * Returns the current date and time in JST (UTC+9) as a "YYYY-MM-DD HH:mm" string.
  */
 export function nowJstDateTime(): string {
     const jstMs = Date.now() + JST_OFFSET_MS;

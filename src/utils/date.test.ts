@@ -33,7 +33,7 @@ describe("nowJstDateTime", () => {
         vi.restoreAllMocks();
     });
 
-    it("returns a YYYY-MM-DD HH:MM string", () => {
+    it("returns a YYYY-MM-DD HH:mm string", () => {
         const result = nowJstDateTime();
         expect(result).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
     });
