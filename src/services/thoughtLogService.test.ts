@@ -275,3 +275,49 @@ describe("ThoughtLogService.updateLog", () => {
     });
 });
 
+// ── enqueueEntry ───────────────────────────────────────────────────────────────
+
+describe("ThoughtLogService.enqueueEntry", () => {
+    it("throws when no create entry queue service is configured", async () => {
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config);
+        await expect(service.enqueueEntry({ request_id: "req-1", raw: "hello" })).rejects.toThrow(
+            "Create entry queue service not configured",
+        );
+    });
+
+    it("sends create-entry message to queue and returns queued outcome", async () => {
+        const createEntryQueue = makeQueue();
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, undefined, createEntryQueue);
+        const outcome = await service.enqueueEntry({ request_id: "req-1", raw: "hello" });
+        expect(outcome.kind).toBe("queued");
+        expect(createEntryQueue.sendMessage).toHaveBeenCalledOnce();
+        const msg = JSON.parse((createEntryQueue.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+        expect(msg.type).toBe("create-entry");
+        expect(msg.payload.request_id).toBe("req-1");
+    });
+
+    it("returns too_large when payload exceeds 200KB", async () => {
+        const createEntryQueue = makeQueue();
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, undefined, createEntryQueue);
+        const largeRaw = "x".repeat(200 * 1024);
+        const outcome = await service.enqueueEntry({ request_id: "req-large", raw: largeRaw });
+        expect(outcome.kind).toBe("too_large");
+        expect(createEntryQueue.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it("does not exceed limit for payload just under 200KB", async () => {
+        const createEntryQueue = makeQueue();
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, undefined, createEntryQueue);
+        // Compute how many bytes the envelope uses with an empty raw field.
+        // Adding `remaining` ASCII chars to raw increases the serialized message by exactly `remaining` bytes.
+        // Final message size = emptyEnvelopeSize + remaining = 200 * 1024 - 1 (just under the limit).
+        const emptyEnvelopeSize = Buffer.byteLength(
+            JSON.stringify({ type: "create-entry", payload: { request_id: "r", raw: "" } }),
+            "utf8",
+        );
+        const remaining = 200 * 1024 - emptyEnvelopeSize - 1;
+        const outcome = await service.enqueueEntry({ request_id: "r", raw: "x".repeat(remaining) });
+        expect(outcome.kind).toBe("queued");
+    });
+});
+

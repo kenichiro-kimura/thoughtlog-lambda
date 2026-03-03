@@ -75,7 +75,7 @@ export function createThoughtLogService(env: ContainerEnv): ThoughtLogService {
         owner: env.owner,
         repo: env.repo,
         defaultLabels: env.defaultLabels,
-    }, queueService);
+    }, queueService, queueService);
 }
 
 export interface QueueHandlerEnv {
