@@ -182,7 +182,7 @@ describe("GitHubApiService.updateComment", () => {
         const comment: GitHubComment = { id: 55, body: "## 10:00\nrefined\n" };
         const http = makeHttp(comment);
         const svc = new GitHubApiService(http);
-        const result = await svc.updateComment({ owner, repo, commentId: 55, body: "## 10:00\nrefined\n", token });
+        const result = await svc.updateComment({ owner, repo, commentId: 55, body: "````\n## 10:00\nrefined\n\n````\n", token });
         expect(result).toEqual(comment);
         const [url, opts] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
         expect(url).toContain("/issues/comments/55");
