@@ -56,7 +56,7 @@ export class IssueFinalizeService {
         const title = result.title.startsWith(dateKey) ? result.title : `${dateKey} ${result.title}`;
 
         await this.github.updateIssue({ owner, repo, issueNumber, title, body: result.body, token });
-        await this.github.addComment({ owner, repo, issueNumber, commentBody: `# ${title}\n\n${result.body}`, token });
+        await this.github.addComment({ owner, repo, issueNumber, commentBody: `\`\`\`\`\n# ${title}\n\n${result.body}\`\`\`\``, token });
         await this.github.addComment({ owner, repo, issueNumber, commentBody: `finalizeしました(${nowJstDateTime()})`, token });
         await this.github.closeIssue({ owner, repo, issueNumber, token });
     }
