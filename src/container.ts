@@ -47,7 +47,6 @@ export interface ContainerEnv extends ThoughtLogConfig {
     openAiModel: string | undefined;
     openAiSystemPrompt: string | undefined;
     voiceQueueUrl: string | undefined;
-    createEntryQueueUrl: string | undefined;
 }
 
 /**
@@ -72,15 +71,11 @@ export function createThoughtLogService(env: ContainerEnv): ThoughtLogService {
         ? new SqsQueueService(sqsClient, env.voiceQueueUrl)
         : undefined;
 
-    const createEntryQueueService = env.createEntryQueueUrl
-        ? new SqsQueueService(sqsClient, env.createEntryQueueUrl)
-        : undefined;
-
     return new ThoughtLogService(auth, github, idempotency, {
         owner: env.owner,
         repo: env.repo,
         defaultLabels: env.defaultLabels,
-    }, queueService, createEntryQueueService);
+    }, queueService, queueService);
 }
 
 export interface QueueHandlerEnv {

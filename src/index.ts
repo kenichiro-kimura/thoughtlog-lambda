@@ -29,7 +29,6 @@ export const handler = async (event: APIGatewayProxyEventV2 | APIGatewayProxyEve
         openAiModel: process.env.OPENAI_MODEL,
         openAiSystemPrompt: process.env.OPENAI_SYSTEM_PROMPT,
         voiceQueueUrl: process.env.VOICE_QUEUE_URL,
-        createEntryQueueUrl: process.env.CREATE_ENTRY_QUEUE_URL,
     });
 
     const request = new LambdaHttpRequest(event);
