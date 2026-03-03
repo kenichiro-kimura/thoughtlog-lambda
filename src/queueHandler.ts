@@ -12,11 +12,21 @@ const env = {
     finalizeOpenAiSystemPrompt: process.env.FINALIZE_OPENAI_SYSTEM_PROMPT,
 };
 
+const githubOwner = process.env.GITHUB_OWNER;
+if (!githubOwner) {
+    throw new Error("Environment variable GITHUB_OWNER is required but was not set.");
+}
+
+const githubRepo = process.env.GITHUB_REPO;
+if (!githubRepo) {
+    throw new Error("Environment variable GITHUB_REPO is required but was not set.");
+}
+
 const refiner = createVoiceCommentRefiner(env);
 const finalizer = createFinalizeService(env);
 const thoughtLog = createThoughtLogService({
-    owner: process.env.GITHUB_OWNER ?? "",
-    repo: process.env.GITHUB_REPO ?? "",
+    owner: githubOwner,
+    repo: githubRepo,
     defaultLabels: process.env.DEFAULT_LABELS || "thoughtlog",
     ...env,
     idempotencyTable: process.env.IDEMPOTENCY_TABLE,
