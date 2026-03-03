@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Payload, GitHubIssue, CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome, VoiceRefineMessage, FinalizeMessage } from "../types";
+import type { Payload, GitHubIssue, CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, UpdateLogOutcome, VoiceRefineMessage, FinalizeMessage, CreateEntryMessage } from "../types";
 import { getDateKeyJst } from "../utils/date";
 import { parseLabels, formatEntry } from "../utils/format";
 import type { IAuthService } from "../interfaces/IAuthService";
@@ -9,7 +9,7 @@ import type { IThoughtLogService } from "../interfaces/IThoughtLogService";
 import type { IQueueService } from "../interfaces/IQueueService";
 
 export type { IThoughtLogService };
-export type { CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome };
+export type { CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, UpdateLogOutcome };
 
 export interface ThoughtLogConfig {
     owner: string;
@@ -28,6 +28,7 @@ export class ThoughtLogService implements IThoughtLogService {
         private readonly idempotency: IIdempotencyService,
         private readonly config: ThoughtLogConfig,
         private readonly queueService?: IQueueService,
+        private readonly createEntryQueueService?: IQueueService,
     ) {}
 
     async createEntry(payload: Payload): Promise<CreateEntryOutcome> {
@@ -106,6 +107,20 @@ export class ThoughtLogService implements IThoughtLogService {
             await this.idempotency.markFailed(requestId, e instanceof Error ? e.message : String(e));
             throw e;
         }
+    }
+
+    async enqueueEntry(payload: Payload): Promise<EnqueueEntryOutcome> {
+        if (!this.createEntryQueueService) {
+            throw new Error("Create entry queue service not configured");
+        }
+        const message: CreateEntryMessage = { type: "create-entry", payload };
+        const messageBody = JSON.stringify(message);
+        const MAX_BYTES = 200 * 1024;
+        if (Buffer.byteLength(messageBody, "utf8") > MAX_BYTES) {
+            return { kind: "too_large" };
+        }
+        await this.createEntryQueueService.sendMessage(messageBody);
+        return { kind: "queued" };
     }
 
     async getLog(dateKey: string): Promise<GetLogOutcome> {

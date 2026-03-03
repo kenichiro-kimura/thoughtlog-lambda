@@ -44,6 +44,22 @@ export class ThoughtlogStack extends cdk.Stack {
       },
     });
 
+    // SQS queue for async issue/comment creation
+    const createEntryDlq = new sqs.Queue(this, 'CreateEntryDLQ', {
+      queueName: 'thoughtlog-create-entry-dlq',
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    const createEntryQueue = new sqs.Queue(this, 'CreateEntryQueue', {
+      queueName: 'thoughtlog-create-entry',
+      visibilityTimeout: cdk.Duration.minutes(3),
+      retentionPeriod: cdk.Duration.days(1),
+      deadLetterQueue: {
+        queue: createEntryDlq,
+        maxReceiveCount: 5,
+      },
+    });
+
     // Shared bundling configuration
     const repoRoot = path.join(__dirname, '../..');
     const localBundler = {
@@ -110,6 +126,7 @@ export class ThoughtlogStack extends cdk.Stack {
         ...sharedEnv,
         IDEMPOTENCY_TABLE: table.tableName,
         VOICE_QUEUE_URL: voiceQueue.queueUrl,
+        CREATE_ENTRY_QUEUE_URL: createEntryQueue.queueUrl,
         ...(this.node.tryGetContext('idempotencyTtlDays')
           ? { IDEMPOTENCY_TTL_DAYS: this.node.tryGetContext('idempotencyTtlDays') as string }
           : {}),
@@ -132,6 +149,8 @@ export class ThoughtlogStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       environment: {
         ...sharedEnv,
+        IDEMPOTENCY_TABLE: table.tableName,
+        VOICE_QUEUE_URL: voiceQueue.queueUrl,
         ...(this.node.tryGetContext('openAiModel')
           ? { OPENAI_MODEL: this.node.tryGetContext('openAiModel') as string }
           : {}),
@@ -147,16 +166,24 @@ export class ThoughtlogStack extends cdk.Stack {
       },
     });
 
-    // Attach SQS event source to the queue Lambda function
+    // Attach SQS event sources to the queue Lambda function
     queueFn.addEventSource(new lambdaEventSources.SqsEventSource(voiceQueue, {
+      batchSize: 1,
+    }));
+    queueFn.addEventSource(new lambdaEventSources.SqsEventSource(createEntryQueue, {
       batchSize: 1,
     }));
 
     // Grant Lambda read/write access to DynamoDB
     table.grantReadWriteData(fn);
+    table.grantReadWriteData(queueFn);
 
-    // Grant the HTTP Lambda send access to the voice queue
+    // Grant the HTTP Lambda send access to the voice queue and create-entry queue
     voiceQueue.grantSendMessages(fn);
+    createEntryQueue.grantSendMessages(fn);
+
+    // Grant the queue Lambda send access to the voice queue (for voice polish after create-entry)
+    voiceQueue.grantSendMessages(queueFn);
 
     // GITHUB_PRIVATE_KEY_SECRET_ARN: the Lambda reads the private key from Secrets Manager at runtime.
     // Provide the secret ARN via CDK context: -c githubPrivateKeySecretArn="arn:aws:secretsmanager:..."
@@ -232,6 +259,11 @@ export class ThoughtlogStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'VoiceQueueUrl', {
       value: voiceQueue.queueUrl,
       description: 'SQS queue URL for voice comment refinement',
+    });
+
+    new cdk.CfnOutput(this, 'CreateEntryQueueUrl', {
+      value: createEntryQueue.queueUrl,
+      description: 'SQS queue URL for async issue/comment creation',
     });
   }
 }

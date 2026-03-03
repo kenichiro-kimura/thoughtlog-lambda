@@ -1,5 +1,5 @@
 import type { SQSEvent } from "aws-lambda";
-import { createVoiceCommentRefiner, createFinalizeService } from "./container";
+import { createVoiceCommentRefiner, createFinalizeService, createThoughtLogService } from "./container";
 import type { SqsMessage } from "./types";
 
 const env = {
@@ -14,6 +14,16 @@ const env = {
 
 const refiner = createVoiceCommentRefiner(env);
 const finalizer = createFinalizeService(env);
+const thoughtLog = createThoughtLogService({
+    owner: process.env.GITHUB_OWNER ?? "",
+    repo: process.env.GITHUB_REPO ?? "",
+    defaultLabels: process.env.DEFAULT_LABELS || "thoughtlog",
+    ...env,
+    idempotencyTable: process.env.IDEMPOTENCY_TABLE,
+    idempotencyTtlDays: undefined,
+    voiceQueueUrl: process.env.VOICE_QUEUE_URL,
+    createEntryQueueUrl: undefined,
+});
 
 export const handler = async (event: SQSEvent): Promise<void> => {
     for (const record of event.Records) {
@@ -30,6 +40,8 @@ export const handler = async (event: SQSEvent): Promise<void> => {
             await finalizer.finalize(message);
         } else if (message.type === "voice-polish") {
             await refiner.refineComment(message);
+        } else if (message.type === "create-entry") {
+            await thoughtLog.createEntry(message.payload);
         } else {
             const unknownType = (message as { type?: unknown }).type;
             console.warn(`Unknown SQS message type: ${JSON.stringify(unknownType)}. messageId=${record.messageId}`);

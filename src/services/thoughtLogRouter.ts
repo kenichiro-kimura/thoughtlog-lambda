@@ -62,17 +62,11 @@ export class ThoughtLogRouter {
         }
 
         try {
-            const outcome = await this.service.createEntry(payload);
-            if (outcome.kind === "idempotent") {
-                return jsonResponse(outcome.statusCode, outcome.body);
+            const outcome = await this.service.enqueueEntry(payload);
+            if (outcome.kind === "too_large") {
+                return jsonResponse(HTTP_STATUS.PAYLOAD_TOO_LARGE, { ok: false, error: "payload_too_large" });
             }
-            return jsonResponse(HTTP_STATUS.CREATED, {
-                ok: true,
-                date: outcome.date,
-                issue_number: outcome.issue_number,
-                issue_url: outcome.issue_url,
-                comment_id: outcome.comment_id,
-            });
+            return jsonResponse(HTTP_STATUS.CREATED, { ok: true, queued: true });
         } catch (e) {
             return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: e instanceof Error ? e.message : String(e) });
         }
