@@ -81,7 +81,7 @@ describe("IssueFinalizeService.finalize", () => {
         await svc.finalize(message);
 
         const calls = (github.addComment as ReturnType<typeof vi.fn>).mock.calls;
-        expect(calls[0][0].commentBody).toBe("# 2024-03-01 Daily summary\n\n# Summary\n\nAll thoughts.");
+        expect(calls[0][0].commentBody).toBe("````\n# 2024-03-01 Daily summary\n\n# Summary\n\nAll thoughts.\n````\n");
         expect(calls[1][0].commentBody).toBe("finalizeしました(2024-03-01 19:00)");
         const addCommentOrder = (github.addComment as ReturnType<typeof vi.fn>).mock.invocationCallOrder;
         const closeIssueOrder = (github.closeIssue as ReturnType<typeof vi.fn>).mock.invocationCallOrder;
