@@ -105,4 +105,36 @@ export class DynamoDBIdempotencyService implements IIdempotencyService {
             // markFailed is best-effort; swallowing errors here prevents masking the original failure
         }
     }
+
+    async getIssueNumberByTitle(title: string): Promise<number | null> {
+        if (!this.tableName) return null;
+
+        // DynamoDB GetCommand fetches by primary key only; status is validated after retrieval.
+        const result = await this.ddb.send(new GetCommand({
+            TableName: this.tableName,
+            Key: { request_id: title },
+        }));
+
+        const item = result.Item;
+        if (item && item.status === "issue_cache" && typeof item.issue_number === "number") {
+            return item.issue_number;
+        }
+        return null;
+    }
+
+    async putIssueTitleCache(title: string, issueNumber: number): Promise<void> {
+        if (!this.tableName) return;
+
+        const ttl = nowEpoch() + this.ttlDays * 24 * 60 * 60;
+
+        await this.ddb.send(new PutCommand({
+            TableName: this.tableName,
+            Item: {
+                request_id: title,
+                status: "issue_cache",
+                issue_number: issueNumber,
+                ttl,
+            },
+        }));
+    }
 }

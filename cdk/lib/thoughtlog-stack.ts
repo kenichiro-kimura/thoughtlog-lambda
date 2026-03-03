@@ -28,7 +28,7 @@ export class ThoughtlogStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // SQS queue for async voice comment refinement
+    // SQS queue for async voice comment refinement and issue/comment creation
     const voiceDlq = new sqs.Queue(this, 'VoiceRefineDLQ', {
       queueName: 'thoughtlog-voice-refine-dlq',
       retentionPeriod: cdk.Duration.days(14),
@@ -132,6 +132,20 @@ export class ThoughtlogStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(5),
       environment: {
         ...sharedEnv,
+        IDEMPOTENCY_TABLE: table.tableName,
+        VOICE_QUEUE_URL: voiceQueue.queueUrl,
+        ...(this.node.tryGetContext('openAiModel')
+          ? { OPENAI_MODEL: this.node.tryGetContext('openAiModel') as string }
+          : {}),
+        ...(this.node.tryGetContext('openAiSystemPrompt')
+          ? { OPENAI_SYSTEM_PROMPT: this.node.tryGetContext('openAiSystemPrompt') as string }
+          : {}),
+        ...(this.node.tryGetContext('finalizeOpenAiModel')
+          ? { FINALIZE_OPENAI_MODEL: this.node.tryGetContext('finalizeOpenAiModel') as string }
+          : {}),
+        ...(this.node.tryGetContext('finalizeOpenAiSystemPrompt')
+          ? { FINALIZE_OPENAI_SYSTEM_PROMPT: this.node.tryGetContext('finalizeOpenAiSystemPrompt') as string }
+          : {}),
       },
     });
 
@@ -142,9 +156,13 @@ export class ThoughtlogStack extends cdk.Stack {
 
     // Grant Lambda read/write access to DynamoDB
     table.grantReadWriteData(fn);
+    table.grantReadWriteData(queueFn);
 
     // Grant the HTTP Lambda send access to the voice queue
     voiceQueue.grantSendMessages(fn);
+
+    // Grant the queue Lambda send access to the voice queue (for voice polish after create-entry)
+    voiceQueue.grantSendMessages(queueFn);
 
     // GITHUB_PRIVATE_KEY_SECRET_ARN: the Lambda reads the private key from Secrets Manager at runtime.
     // Provide the secret ARN via CDK context: -c githubPrivateKeySecretArn="arn:aws:secretsmanager:..."
@@ -219,7 +237,7 @@ export class ThoughtlogStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'VoiceQueueUrl', {
       value: voiceQueue.queueUrl,
-      description: 'SQS queue URL for voice comment refinement',
+      description: 'SQS queue URL for voice comment refinement and async entry creation',
     });
   }
 }

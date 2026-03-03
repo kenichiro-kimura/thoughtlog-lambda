@@ -78,6 +78,26 @@ describe("GitHubApiService.updateIssue", () => {
         const [, opts] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
         expect((opts as { method: string }).method).toBe("PATCH");
     });
+
+    it("includes title in PATCH body when title is provided", async () => {
+        const issue: GitHubIssue = { number: 3 };
+        const http = makeHttp(issue);
+        const svc = new GitHubApiService(http);
+        await svc.updateIssue({ owner, repo, issueNumber: 3, title: "New Title", body: "new body", token });
+        const [, opts] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect((opts as { body: Record<string, unknown> }).body.title).toBe("New Title");
+        expect((opts as { body: Record<string, unknown> }).body.body).toBe("new body");
+    });
+
+    it("does not include title in PATCH body when title is omitted", async () => {
+        const issue: GitHubIssue = { number: 3 };
+        const http = makeHttp(issue);
+        const svc = new GitHubApiService(http);
+        await svc.updateIssue({ owner, repo, issueNumber: 3, body: "new body", token });
+        const [, opts] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect((opts as { body: Record<string, unknown> }).body).not.toHaveProperty("title");
+        expect((opts as { body: Record<string, unknown> }).body.body).toBe("new body");
+    });
 });
 
 // ── closeIssue ─────────────────────────────────────────────────────────────────
@@ -162,7 +182,7 @@ describe("GitHubApiService.updateComment", () => {
         const comment: GitHubComment = { id: 55, body: "## 10:00\nrefined\n" };
         const http = makeHttp(comment);
         const svc = new GitHubApiService(http);
-        const result = await svc.updateComment({ owner, repo, commentId: 55, body: "## 10:00\nrefined\n", token });
+        const result = await svc.updateComment({ owner, repo, commentId: 55, body: "````\n## 10:00\nrefined\n\n````\n", token });
         expect(result).toEqual(comment);
         const [url, opts] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
         expect(url).toContain("/issues/comments/55");

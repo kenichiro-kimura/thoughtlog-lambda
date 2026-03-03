@@ -52,21 +52,45 @@ export type CreateEntryOutcome =
     | { kind: "created"; date: string; issue_number: number; issue_url: string; comment_id: number }
     | { kind: "idempotent"; statusCode: number; body: { ok: boolean; error?: string; idempotent?: boolean; issue_number?: number; issue_url?: string; comment_id?: number; status?: string } };
 
+export type EnqueueEntryOutcome =
+    | { kind: "queued" }
+    | { kind: "too_large" };
+
 export type GetLogOutcome =
     | { kind: "found"; body: string }
     | { kind: "not_found"; date: string };
 
 export type UpdateLogOutcome =
-    | { kind: "updated"; date: string; issue_number: number; issue_url: string }
+    | { kind: "queued"; date: string }
     | { kind: "not_found"; date: string };
 
 /** Message payload sent to the queue for async voice comment refinement. */
 export interface VoiceRefineMessage {
+    type: "voice-polish";
     owner: string;
     repo: string;
     issueNumber: number;
     commentId: number;
 }
+
+/** Message payload sent to the queue for async final polish of a daily log. */
+export interface FinalizeMessage {
+    type: "finalize";
+    owner: string;
+    repo: string;
+    dateKey: string;
+    labels: string[];
+    issueNumber: number;
+}
+
+/** Message payload sent to the queue for async issue/comment creation. */
+export interface CreateEntryMessage {
+    type: "create-entry";
+    payload: Payload;
+}
+
+/** Union of all SQS message types handled by the queue handler. */
+export type SqsMessage = VoiceRefineMessage | FinalizeMessage | CreateEntryMessage;
 
 /** Framework-agnostic HTTP response returned by ThoughtLogRouter. */
 export interface HttpResponse {

@@ -168,3 +168,56 @@ describe("DynamoDBIdempotencyService – custom TTL", () => {
         }
     });
 });
+
+// ── getIssueNumberByTitle ─────────────────────────────────────────────────────
+
+describe("DynamoDBIdempotencyService.getIssueNumberByTitle", () => {
+    it("returns null when tableName is undefined", async () => {
+        const svc = new DynamoDBIdempotencyService(makeDdb(), undefined);
+        const result = await svc.getIssueNumberByTitle("2024-01-15");
+        expect(result).toBeNull();
+    });
+
+    it("returns null when no item found", async () => {
+        const send = vi.fn().mockResolvedValue({ Item: undefined });
+        const svc = new DynamoDBIdempotencyService(makeDdb(send as SendFn), "my-table");
+        const result = await svc.getIssueNumberByTitle("2024-01-15");
+        expect(result).toBeNull();
+    });
+
+    it("returns null when item status is not issue_cache", async () => {
+        const send = vi.fn().mockResolvedValue({ Item: { request_id: "2024-01-15", status: "done", issue_number: 42 } });
+        const svc = new DynamoDBIdempotencyService(makeDdb(send as SendFn), "my-table");
+        const result = await svc.getIssueNumberByTitle("2024-01-15");
+        expect(result).toBeNull();
+    });
+
+    it("returns the issue number when a valid cache item exists", async () => {
+        const send = vi.fn().mockResolvedValue({ Item: { request_id: "2024-01-15", status: "issue_cache", issue_number: 42 } });
+        const svc = new DynamoDBIdempotencyService(makeDdb(send as SendFn), "my-table");
+        const result = await svc.getIssueNumberByTitle("2024-01-15");
+        expect(result).toBe(42);
+    });
+});
+
+// ── putIssueTitleCache ────────────────────────────────────────────────────────
+
+describe("DynamoDBIdempotencyService.putIssueTitleCache", () => {
+    it("is a no-op when tableName is undefined", async () => {
+        const send = vi.fn();
+        const svc = new DynamoDBIdempotencyService(makeDdb(send as SendFn), undefined);
+        await svc.putIssueTitleCache("2024-01-15", 42);
+        expect(send).not.toHaveBeenCalled();
+    });
+
+    it("calls PutCommand with request_id=title, status=issue_cache, and issue_number", async () => {
+        const send = vi.fn().mockResolvedValue({});
+        const svc = new DynamoDBIdempotencyService(makeDdb(send as SendFn), "my-table");
+        await svc.putIssueTitleCache("2024-01-15", 42);
+        expect(send).toHaveBeenCalledOnce();
+        const command = send.mock.calls[0][0];
+        expect(command.input.Item.request_id).toBe("2024-01-15");
+        expect(command.input.Item.status).toBe("issue_cache");
+        expect(command.input.Item.issue_number).toBe(42);
+    });
+});

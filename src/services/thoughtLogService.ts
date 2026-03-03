@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Payload, GitHubIssue, CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome, VoiceRefineMessage } from "../types";
+import type { Payload, GitHubIssue, CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, UpdateLogOutcome, VoiceRefineMessage, FinalizeMessage, CreateEntryMessage } from "../types";
 import { getDateKeyJst } from "../utils/date";
 import { parseLabels, formatEntry } from "../utils/format";
 import type { IAuthService } from "../interfaces/IAuthService";
@@ -9,7 +9,7 @@ import type { IThoughtLogService } from "../interfaces/IThoughtLogService";
 import type { IQueueService } from "../interfaces/IQueueService";
 
 export type { IThoughtLogService };
-export type { CreateEntryOutcome, GetLogOutcome, UpdateLogOutcome };
+export type { CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, UpdateLogOutcome };
 
 export interface ThoughtLogConfig {
     owner: string;
@@ -28,6 +28,7 @@ export class ThoughtLogService implements IThoughtLogService {
         private readonly idempotency: IIdempotencyService,
         private readonly config: ThoughtLogConfig,
         private readonly queueService?: IQueueService,
+        private readonly createEntryQueueService?: IQueueService,
     ) {}
 
     async createEntry(payload: Payload): Promise<CreateEntryOutcome> {
@@ -56,11 +57,18 @@ export class ThoughtLogService implements IThoughtLogService {
         try {
             const token = await this.auth.getInstallationToken();
 
-            let issue: GitHubIssue | null = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
-            if (!issue) {
-                issue = await this.github.createDailyIssue({ owner, repo, dateKey, labels, token });
-            } else if (!issue.html_url) {
-                issue = await this.github.getIssue({ owner, repo, issueNumber: issue.number, token });
+            const cachedIssueNumber = await this.idempotency.getIssueNumberByTitle(dateKey);
+            let issue: GitHubIssue;
+            if (cachedIssueNumber !== null) {
+                issue = await this.github.getIssue({ owner, repo, issueNumber: cachedIssueNumber, token });
+            } else {
+                const found = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
+                if (found) {
+                    issue = found.html_url ? found : await this.github.getIssue({ owner, repo, issueNumber: found.number, token });
+                } else {
+                    issue = await this.github.createDailyIssue({ owner, repo, dateKey, labels, token });
+                }
+                await this.idempotency.putIssueTitleCache(dateKey, issue.number);
             }
 
             const comment = await this.github.addComment({
@@ -75,6 +83,7 @@ export class ThoughtLogService implements IThoughtLogService {
 
             if (payload.source === "voice" && this.queueService) {
                 const message: VoiceRefineMessage = {
+                    type: "voice-polish",
                     owner,
                     repo,
                     issueNumber: issue.number,
@@ -100,6 +109,20 @@ export class ThoughtLogService implements IThoughtLogService {
         }
     }
 
+    async enqueueEntry(payload: Payload): Promise<EnqueueEntryOutcome> {
+        if (!this.createEntryQueueService) {
+            throw new Error("Create entry queue service not configured");
+        }
+        const message: CreateEntryMessage = { type: "create-entry", payload };
+        const messageBody = JSON.stringify(message);
+        const MAX_BYTES = 200 * 1024;
+        if (Buffer.byteLength(messageBody, "utf8") > MAX_BYTES) {
+            return { kind: "too_large" };
+        }
+        await this.createEntryQueueService.sendMessage(messageBody);
+        return { kind: "queued" };
+    }
+
     async getLog(dateKey: string): Promise<GetLogOutcome> {
         const { owner, repo } = this.config;
         const token = await this.auth.getInstallationToken();
@@ -112,7 +135,10 @@ export class ThoughtLogService implements IThoughtLogService {
         return { kind: "found", body: comments.map((c) => c.body || "").join("\n") };
     }
 
-    async updateLog(dateKey: string, newBody: string): Promise<UpdateLogOutcome> {
+    async updateLog(dateKey: string): Promise<UpdateLogOutcome> {
+        if (!this.queueService) {
+            throw new Error("Queue service not configured for finalize");
+        }
         const { owner, repo } = this.config;
         const token = await this.auth.getInstallationToken();
         const labels = parseLabels(this.config.defaultLabels, []);
@@ -120,16 +146,15 @@ export class ThoughtLogService implements IThoughtLogService {
         const issue = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
         if (!issue) return { kind: "not_found", date: dateKey };
 
-        const bodyToUpdate = newBody;
-
-        await this.github.updateIssue({ owner, repo, issueNumber: issue.number, body: bodyToUpdate, token });
-        const closed = await this.github.closeIssue({ owner, repo, issueNumber: issue.number, token });
-
-        return {
-            kind: "updated",
-            date: dateKey,
-            issue_number: closed.number,
-            issue_url: closed.html_url!,
+        const message: FinalizeMessage = {
+            type: "finalize",
+            owner,
+            repo,
+            dateKey,
+            labels,
+            issueNumber: issue.number,
         };
+        await this.queueService.sendMessage(JSON.stringify(message));
+        return { kind: "queued", date: dateKey };
     }
 }

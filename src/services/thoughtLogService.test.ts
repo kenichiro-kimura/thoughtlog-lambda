@@ -35,6 +35,8 @@ function makeIdempotency(overrides: Partial<IIdempotencyService> = {}): IIdempot
         claim: vi.fn().mockResolvedValue({ enabled: false, claimed: true }),
         markDone: vi.fn().mockResolvedValue(undefined),
         markFailed: vi.fn().mockResolvedValue(undefined),
+        getIssueNumberByTitle: vi.fn().mockResolvedValue(null),
+        putIssueTitleCache: vi.fn().mockResolvedValue(undefined),
         ...overrides,
     };
 }
@@ -89,6 +91,43 @@ describe("ThoughtLogService.createEntry", () => {
         const outcome = await service.createEntry({ request_id: "req-2", raw: "new", captured_at: "2024-01-15T10:30:00Z" });
         expect(outcome.kind).toBe("created");
         expect(github.createDailyIssue).toHaveBeenCalledOnce();
+    });
+
+    it("uses cached issue number from DynamoDB when available, skipping GitHub search", async () => {
+        (idempotency.getIssueNumberByTitle as ReturnType<typeof vi.fn>).mockResolvedValue(42);
+        const outcome = await service.createEntry({ request_id: "req-cached", raw: "hello", captured_at: "2024-01-15T10:30:00Z" });
+        expect(outcome.kind).toBe("created");
+        expect(github.findDailyIssue).not.toHaveBeenCalled();
+        expect(github.getIssue).toHaveBeenCalledOnce();
+        expect(github.addComment).toHaveBeenCalledOnce();
+    });
+
+    it("does not call putIssueTitleCache when cache hit", async () => {
+        (idempotency.getIssueNumberByTitle as ReturnType<typeof vi.fn>).mockResolvedValue(42);
+        await service.createEntry({ request_id: "req-cached2", raw: "hello", captured_at: "2024-01-15T10:30:00Z" });
+        expect(idempotency.putIssueTitleCache).not.toHaveBeenCalled();
+    });
+
+    it("saves issue to cache after finding via GitHub search", async () => {
+        await service.createEntry({ request_id: "req-save-cache", raw: "hello", captured_at: "2024-01-15T10:30:00Z" });
+        expect(idempotency.putIssueTitleCache).toHaveBeenCalledOnce();
+        const [, issueNumber] = (idempotency.putIssueTitleCache as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(issueNumber).toBe(42);
+    });
+
+    it("saves issue to cache after finding via GitHub search with correct title", async () => {
+        await service.createEntry({ request_id: "req-save-cache-title", raw: "hello", captured_at: "2024-01-15T10:30:00Z" });
+        expect(idempotency.putIssueTitleCache).toHaveBeenCalledOnce();
+        const [title] = (idempotency.putIssueTitleCache as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(title).toContain("2024-01-15");
+    });
+
+    it("saves issue to cache after creating a new issue", async () => {
+        (github.findDailyIssue as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+        await service.createEntry({ request_id: "req-create-cache", raw: "new", captured_at: "2024-01-15T10:30:00Z" });
+        expect(idempotency.putIssueTitleCache).toHaveBeenCalledOnce();
+        const [, issueNumber] = (idempotency.putIssueTitleCache as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(issueNumber).toBe(42);
     });
 
     it("returns idempotent outcome when claim is not claimed", async () => {
@@ -197,27 +236,88 @@ describe("ThoughtLogService.getLog", () => {
 // ── updateLog ──────────────────────────────────────────────────────────────────
 
 describe("ThoughtLogService.updateLog", () => {
-    it("updates and closes issue, returning updated outcome", async () => {
+    it("throws when no queue service is configured", async () => {
         const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config);
-        const outcome = await service.updateLog("2024-01-15", "summary text");
-        expect(outcome.kind).toBe("updated");
-        if (outcome.kind === "updated") {
-            expect(outcome.issue_number).toBe(42);
-        }
+        await expect(service.updateLog("2024-01-15")).rejects.toThrow("Queue service not configured for finalize");
     });
 
-    it("returns not_found outcome when no issue exists", async () => {
+    it("returns not_found when no issue exists for the date", async () => {
+        const queue = makeQueue();
         const github = makeGitHub({ findDailyIssue: vi.fn().mockResolvedValue(null) });
-        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
-        const outcome = await service.updateLog("2024-01-15", "text");
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config, queue);
+        const outcome = await service.updateLog("2024-01-15");
         expect(outcome.kind).toBe("not_found");
+        expect(queue.sendMessage).not.toHaveBeenCalled();
     });
 
-    it("does not send queue message", async () => {
+    it("enqueues a finalize message and returns queued outcome", async () => {
         const queue = makeQueue();
         const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, queue);
-        await service.updateLog("2024-01-15", "regular text");
-        expect(queue.sendMessage).not.toHaveBeenCalled();
+        const outcome = await service.updateLog("2024-01-15");
+        expect(outcome.kind).toBe("queued");
+        if (outcome.kind === "queued") {
+            expect(outcome.date).toBe("2024-01-15");
+        }
+        expect(queue.sendMessage).toHaveBeenCalledOnce();
+    });
+
+    it("sends a finalize message with correct fields including issueNumber", async () => {
+        const queue = makeQueue();
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, queue);
+        await service.updateLog("2024-01-15");
+        const msg = JSON.parse((queue.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+        expect(msg.type).toBe("finalize");
+        expect(msg.owner).toBe("owner");
+        expect(msg.repo).toBe("repo");
+        expect(msg.dateKey).toBe("2024-01-15");
+        expect(msg.issueNumber).toBe(42);
+        expect(Array.isArray(msg.labels)).toBe(true);
+    });
+});
+
+// ── enqueueEntry ───────────────────────────────────────────────────────────────
+
+describe("ThoughtLogService.enqueueEntry", () => {
+    it("throws when no create entry queue service is configured", async () => {
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config);
+        await expect(service.enqueueEntry({ request_id: "req-1", raw: "hello" })).rejects.toThrow(
+            "Create entry queue service not configured",
+        );
+    });
+
+    it("sends create-entry message to queue and returns queued outcome", async () => {
+        const createEntryQueue = makeQueue();
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, undefined, createEntryQueue);
+        const outcome = await service.enqueueEntry({ request_id: "req-1", raw: "hello" });
+        expect(outcome.kind).toBe("queued");
+        expect(createEntryQueue.sendMessage).toHaveBeenCalledOnce();
+        const msg = JSON.parse((createEntryQueue.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+        expect(msg.type).toBe("create-entry");
+        expect(msg.payload.request_id).toBe("req-1");
+    });
+
+    it("returns too_large when payload exceeds 200KB", async () => {
+        const createEntryQueue = makeQueue();
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, undefined, createEntryQueue);
+        const largeRaw = "x".repeat(200 * 1024);
+        const outcome = await service.enqueueEntry({ request_id: "req-large", raw: largeRaw });
+        expect(outcome.kind).toBe("too_large");
+        expect(createEntryQueue.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it("does not exceed limit for payload just under 200KB", async () => {
+        const createEntryQueue = makeQueue();
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config, undefined, createEntryQueue);
+        // Compute how many bytes the envelope uses with an empty raw field.
+        // Adding `remaining` ASCII chars to raw increases the serialized message by exactly `remaining` bytes.
+        // Final message size = emptyEnvelopeSize + remaining = 200 * 1024 - 1 (just under the limit).
+        const emptyEnvelopeSize = Buffer.byteLength(
+            JSON.stringify({ type: "create-entry", payload: { request_id: "r", raw: "" } }),
+            "utf8",
+        );
+        const remaining = 200 * 1024 - emptyEnvelopeSize - 1;
+        const outcome = await service.enqueueEntry({ request_id: "r", raw: "x".repeat(remaining) });
+        expect(outcome.kind).toBe("queued");
     });
 });
 

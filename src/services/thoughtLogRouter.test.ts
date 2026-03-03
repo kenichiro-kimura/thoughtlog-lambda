@@ -26,12 +26,11 @@ function makeService(overrides: Partial<IThoughtLogService> = {}): IThoughtLogSe
             issue_url: "https://github.com/owner/repo/issues/42",
             comment_id: 99,
         }),
+        enqueueEntry: vi.fn().mockResolvedValue({ kind: "queued" }),
         getLog: vi.fn().mockResolvedValue({ kind: "found", body: "## 19:30\nhello\n" }),
         updateLog: vi.fn().mockResolvedValue({
-            kind: "updated",
+            kind: "queued",
             date: "2024-01-15",
-            issue_number: 42,
-            issue_url: "https://github.com/owner/repo/issues/42",
         }),
         ...overrides,
     } as IThoughtLogService;
@@ -104,15 +103,15 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
         router = new ThoughtLogRouter(service);
     });
 
-    it("returns 200 with updated info on success", async () => {
+    it("returns 202 with queued info on success", async () => {
+        service.updateLog = vi.fn().mockResolvedValue({ kind: "queued", date: "2024-01-15" });
         const request = makeRequest({
             getMethod: vi.fn().mockReturnValue("PUT"),
             getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue('{"raw":"summary text"}'),
         });
         const response = await router.handle(request);
-        expect(response.statusCode).toBe(200);
-        expect(JSON.parse(response.body)).toMatchObject({ ok: true, issue_number: 42 });
+        expect(response.statusCode).toBe(202);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: true, queued: true, date: "2024-01-15" });
     });
 
     it("returns 404 when issue does not exist", async () => {
@@ -120,32 +119,9 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
         const request = makeRequest({
             getMethod: vi.fn().mockReturnValue("PUT"),
             getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue('{"raw":"text"}'),
         });
         const response = await router.handle(request);
         expect(response.statusCode).toBe(404);
-    });
-
-    it("returns 400 on invalid JSON body", async () => {
-        const request = makeRequest({
-            getMethod: vi.fn().mockReturnValue("PUT"),
-            getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue("{bad json"),
-        });
-        const response = await router.handle(request);
-        expect(response.statusCode).toBe(400);
-        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "invalid_json" });
-    });
-
-    it("returns 400 when raw body is empty", async () => {
-        const request = makeRequest({
-            getMethod: vi.fn().mockReturnValue("PUT"),
-            getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue('{"raw":"   "}'),
-        });
-        const response = await router.handle(request);
-        expect(response.statusCode).toBe(400);
-        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "missing_body" });
     });
 
     it("returns 500 when updateLog throws", async () => {
@@ -153,7 +129,6 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
         const request = makeRequest({
             getMethod: vi.fn().mockReturnValue("PUT"),
             getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue('{"raw":"text"}'),
         });
         const response = await router.handle(request);
         expect(response.statusCode).toBe(500);
@@ -164,21 +139,20 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
         const request = makeRequest({
             getMethod: vi.fn().mockReturnValue("PUT"),
             getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue('{"raw":"text"}'),
         });
         const response = await router.handle(request);
         expect(response.statusCode).toBe(500);
         expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "plain string error" });
     });
 
-    it("calls updateLog with dateKey and body", async () => {
+    it("calls updateLog with only the dateKey (no body required)", async () => {
+        service.updateLog = vi.fn().mockResolvedValue({ kind: "queued", date: "2024-01-15" });
         const request = makeRequest({
             getMethod: vi.fn().mockReturnValue("PUT"),
             getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-            getRawBody: vi.fn().mockReturnValue('{"raw":"summary text"}'),
         });
         await router.handle(request);
-        expect(service.updateLog).toHaveBeenCalledWith("2024-01-15", "summary text");
+        expect(service.updateLog).toHaveBeenCalledWith("2024-01-15");
     });
 });
 
@@ -193,11 +167,11 @@ describe("ThoughtLogRouter POST /", () => {
         router = new ThoughtLogRouter(service);
     });
 
-    it("returns 201 with created entry info", async () => {
+    it("returns 201 with queued info", async () => {
         const request = makeRequest();
         const response = await router.handle(request);
         expect(response.statusCode).toBe(201);
-        expect(JSON.parse(response.body)).toMatchObject({ ok: true, issue_number: 42, comment_id: 99 });
+        expect(JSON.parse(response.body)).toMatchObject({ ok: true, queued: true });
     });
 
     it("returns 400 when request_id is missing", async () => {
@@ -218,31 +192,33 @@ describe("ThoughtLogRouter POST /", () => {
         expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "invalid_json" });
     });
 
-    it("returns idempotent statusCode and body for duplicate request", async () => {
-        service.createEntry = vi.fn().mockResolvedValue({
-            kind: "idempotent",
-            statusCode: 200,
-            body: { ok: true, idempotent: true, issue_number: 42 },
-        });
+    it("returns 413 when payload is too large", async () => {
+        service.enqueueEntry = vi.fn().mockResolvedValue({ kind: "too_large" });
         const request = makeRequest();
         const response = await router.handle(request);
-        expect(response.statusCode).toBe(200);
-        expect(JSON.parse(response.body)).toMatchObject({ ok: true, idempotent: true });
+        expect(response.statusCode).toBe(413);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "payload_too_large" });
     });
 
-    it("returns 500 when createEntry throws", async () => {
-        service.createEntry = vi.fn().mockRejectedValue(new Error("gh error"));
+    it("returns 500 when enqueueEntry throws", async () => {
+        service.enqueueEntry = vi.fn().mockRejectedValue(new Error("queue error"));
         const request = makeRequest();
         const response = await router.handle(request);
         expect(response.statusCode).toBe(500);
     });
 
-    it("returns 500 with stringified error when createEntry throws a non-Error value", async () => {
-        service.createEntry = vi.fn().mockRejectedValue("plain string error");
+    it("returns 500 with stringified error when enqueueEntry throws a non-Error value", async () => {
+        service.enqueueEntry = vi.fn().mockRejectedValue("plain string error");
         const request = makeRequest();
         const response = await router.handle(request);
         expect(response.statusCode).toBe(500);
         expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "plain string error" });
+    });
+
+    it("calls enqueueEntry with the parsed payload", async () => {
+        const request = makeRequest();
+        await router.handle(request);
+        expect(service.enqueueEntry).toHaveBeenCalledWith({ request_id: "req-1", raw: "hello" });
     });
 });
 

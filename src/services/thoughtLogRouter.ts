@@ -32,25 +32,14 @@ export class ThoughtLogRouter {
             }
         }
 
-        // PUT /log/yyyy-mm-dd
+        // PUT /log/yyyy-mm-dd – enqueue final polish
         if (method === "PUT" && dateParam) {
-            const decodedBody = request.getRawBody();
-            let putPayload: { raw?: string };
             try {
-                putPayload = decodedBody ? JSON.parse(decodedBody) as { raw?: string } : {};
-            } catch (e) {
-                return jsonResponse(HTTP_STATUS.BAD_REQUEST, { ok: false, error: "invalid_json", detail: e instanceof Error ? e.message : String(e) });
-            }
-            const newBody = (putPayload.raw ?? "").toString().trim();
-            if (!newBody) {
-                return jsonResponse(HTTP_STATUS.BAD_REQUEST, { ok: false, error: "missing_body" });
-            }
-            try {
-                const outcome = await this.service.updateLog(dateParam, newBody);
+                const outcome = await this.service.updateLog(dateParam);
                 if (outcome.kind === "not_found") {
                     return jsonResponse(HTTP_STATUS.NOT_FOUND, { ok: false, error: "not_found", date: outcome.date });
                 }
-                return jsonResponse(HTTP_STATUS.OK, { ok: true, date: outcome.date, issue_number: outcome.issue_number, issue_url: outcome.issue_url });
+                return jsonResponse(HTTP_STATUS.ACCEPTED, { ok: true, queued: true, date: outcome.date });
             } catch (e) {
                 return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: e instanceof Error ? e.message : String(e) });
             }
@@ -73,17 +62,11 @@ export class ThoughtLogRouter {
         }
 
         try {
-            const outcome = await this.service.createEntry(payload);
-            if (outcome.kind === "idempotent") {
-                return jsonResponse(outcome.statusCode, outcome.body);
+            const outcome = await this.service.enqueueEntry(payload);
+            if (outcome.kind === "too_large") {
+                return jsonResponse(HTTP_STATUS.PAYLOAD_TOO_LARGE, { ok: false, error: "payload_too_large" });
             }
-            return jsonResponse(HTTP_STATUS.CREATED, {
-                ok: true,
-                date: outcome.date,
-                issue_number: outcome.issue_number,
-                issue_url: outcome.issue_url,
-                comment_id: outcome.comment_id,
-            });
+            return jsonResponse(HTTP_STATUS.CREATED, { ok: true, queued: true });
         } catch (e) {
             return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: e instanceof Error ? e.message : String(e) });
         }
