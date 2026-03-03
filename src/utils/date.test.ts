@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { getDateKeyJst, nowEpoch } from "./date";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { getDateKeyJst, nowEpoch, nowJstDateTime } from "./date";
 
 describe("nowEpoch", () => {
     it("returns the current Unix timestamp (seconds)", () => {
@@ -25,5 +25,22 @@ describe("getDateKeyJst", () => {
     it("returns a YYYY-MM-DD string when captured_at is absent", () => {
         const key = getDateKeyJst({});
         expect(key).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+});
+
+describe("nowJstDateTime", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it("returns a YYYY-MM-DD HH:mm string", () => {
+        const result = nowJstDateTime();
+        expect(result).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+    });
+
+    it("converts UTC midnight to JST 09:00 of the same day", () => {
+        // 2024-01-14T00:00:00Z + 9h = 2024-01-14T09:00+09:00
+        vi.spyOn(Date, "now").mockReturnValue(new Date("2024-01-14T00:00:00Z").getTime());
+        expect(nowJstDateTime()).toBe("2024-01-14 09:00");
     });
 });

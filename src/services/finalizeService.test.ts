@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { IssueFinalizeService, FINALIZE_JSON_FORMAT_APPENDIX } from "./finalizeService";
 import type { IAuthService } from "../interfaces/IAuthService";
 import type { IGitHubService } from "../interfaces/IGitHubService";
@@ -50,7 +50,11 @@ const message: FinalizeMessage = {
 // ── IssueFinalizeService ───────────────────────────────────────────────────────
 
 describe("IssueFinalizeService.finalize", () => {
-    it("fetches comments, calls refiner, and updates the issue", async () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it("fetches comments, calls refiner, updates and closes the issue", async () => {
         const github = makeGitHub();
         const textRefiner = makeTextRefiner();
         const svc = new IssueFinalizeService(makeAuth(), github, textRefiner);
@@ -63,6 +67,25 @@ describe("IssueFinalizeService.finalize", () => {
         });
         expect(textRefiner.refine).toHaveBeenCalledOnce();
         expect(github.updateIssue).toHaveBeenCalledOnce();
+        expect(github.addComment).toHaveBeenCalledTimes(2);
+        expect(github.closeIssue).toHaveBeenCalledWith({
+            owner: "owner", repo: "repo", issueNumber: 10, token: "tok",
+        });
+    });
+
+    it("posts a content comment then a finalize datetime comment before closing", async () => {
+        vi.spyOn(Date, "now").mockReturnValue(new Date("2024-03-01T10:00:00Z").getTime());
+        const github = makeGitHub();
+        const svc = new IssueFinalizeService(makeAuth(), github, makeTextRefiner());
+
+        await svc.finalize(message);
+
+        const calls = (github.addComment as ReturnType<typeof vi.fn>).mock.calls;
+        expect(calls[0][0].commentBody).toBe("# 2024-03-01 Daily summary\n\n# Summary\n\nAll thoughts.");
+        expect(calls[1][0].commentBody).toBe("finalizeしました(2024-03-01 19:00)");
+        const addCommentOrder = (github.addComment as ReturnType<typeof vi.fn>).mock.invocationCallOrder;
+        const closeIssueOrder = (github.closeIssue as ReturnType<typeof vi.fn>).mock.invocationCallOrder;
+        expect(Math.max(...addCommentOrder)).toBeLessThan(Math.min(...closeIssueOrder));
     });
 
     it("prepends dateKey to title when not already present", async () => {
