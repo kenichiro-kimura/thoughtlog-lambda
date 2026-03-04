@@ -24,6 +24,7 @@ export class GitHubApiService implements IGitHubService {
         const result = await this.httpClient(url, { token }) as GitHubSearchResult;
 
         const items = result?.items ?? [];
+        console.debug(`GitHub search for "${q}" returned ${items}`);
         const exact = items.find((it) => (it.title || "").trim() === dateKey);
         return exact ?? null;
     }
