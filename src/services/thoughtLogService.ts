@@ -140,11 +140,7 @@ export class ThoughtLogService implements IThoughtLogService {
             throw new Error("Queue service not configured for finalize");
         }
         const { owner, repo } = this.config;
-        const token = await this.auth.getInstallationToken();
         const labels = parseLabels(this.config.defaultLabels, []);
-
-        const issue = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
-        if (!issue) return { kind: "not_found", date: dateKey };
 
         const message: FinalizeMessage = {
             type: "finalize",
