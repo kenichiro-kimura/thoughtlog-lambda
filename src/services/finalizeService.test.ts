@@ -157,6 +157,18 @@ describe("IssueFinalizeService.finalize", () => {
 
         await expect(svc.finalize(message)).rejects.toThrow("OpenAI response missing required fields");
     });
+
+    it("passes all labels derived from defaultLabels to findDailyIssue", async () => {
+        const multiLabelConfig = { owner: "owner", repo: "repo", defaultLabels: "thoughtlog,daily,review" };
+        const github = makeGitHub();
+        const svc = new IssueFinalizeService(makeAuth(), github, makeTextRefiner(), multiLabelConfig);
+
+        await svc.finalize(message);
+
+        expect(github.findDailyIssue).toHaveBeenCalledWith(
+            expect.objectContaining({ labels: ["thoughtlog", "daily", "review"] }),
+        );
+    });
 });
 
 // ── FINALIZE_JSON_FORMAT_APPENDIX ──────────────────────────────────────────────

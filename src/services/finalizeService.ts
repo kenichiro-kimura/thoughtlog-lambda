@@ -1,15 +1,9 @@
 import type { IAuthService } from "../interfaces/IAuthService";
 import type { IGitHubService } from "../interfaces/IGitHubService";
 import type { ITextRefinerService } from "../interfaces/ITextRefinerService";
-import type { FinalizeMessage } from "../types";
+import type { FinalizeMessage, RepositoryConfig } from "../types";
 import { nowJstDateTime } from "../utils/date";
 import { parseLabels } from "../utils/format";
-
-export interface FinalizeConfig {
-    owner: string;
-    repo: string;
-    defaultLabels: string;
-}
 
 /**
  * Appended to the user-supplied system prompt so that OpenAI always returns
@@ -35,7 +29,7 @@ export class IssueFinalizeService {
         private readonly auth: IAuthService,
         private readonly github: IGitHubService,
         private readonly textRefiner: ITextRefinerService,
-        private readonly config: FinalizeConfig,
+        private readonly config: RepositoryConfig,
     ) {}
 
     async finalize(message: FinalizeMessage): Promise<void> {

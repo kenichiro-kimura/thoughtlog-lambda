@@ -172,8 +172,6 @@ describe("ThoughtLogService.createEntry", () => {
         const msg = JSON.parse((queue.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0][0]);
         expect(msg.commentId).toBe(99);
         expect(msg.issueNumber).toBe(42);
-        expect(msg.owner).toBe("owner");
-        expect(msg.repo).toBe("repo");
     });
 
     it("does not send queue message when source is voice but no queueService is configured", async () => {

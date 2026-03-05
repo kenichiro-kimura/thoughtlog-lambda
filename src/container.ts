@@ -15,7 +15,7 @@ import { SqsQueueService } from "./services/sqsService";
 import { ThoughtLogService } from "./services/thoughtLogService";
 import { VoiceCommentRefinerService } from "./services/voiceCommentRefiner";
 import { IssueFinalizeService, FINALIZE_JSON_FORMAT_APPENDIX } from "./services/finalizeService";
-import type { ThoughtLogConfig } from "./services/thoughtLogService";
+import type { RepositoryConfig } from "./types";
 
 // Clients are created once at module load to reuse connections across invocations.
 const ddb = DynamoDBDocumentClient.from(
@@ -38,7 +38,7 @@ function withTracing(name: string, client: HttpClient): HttpClient {
 const tracedGithubRequest = withTracing("GitHub API", githubRequest);
 const tracedOpenAIRequest = withTracing("OpenAI", openAIRequest);
 
-export interface ContainerEnv extends ThoughtLogConfig {
+export interface ContainerEnv extends RepositoryConfig {
     githubAppId: string | undefined;
     githubInstallationId: string | undefined;
     githubPrivateKeySecretArn: string | undefined;
@@ -88,16 +88,14 @@ export interface QueueHandlerEnv {
     finalizeOpenAiSystemPrompt: string | undefined;
 }
 
-export interface FinalizeServiceEnv extends QueueHandlerEnv {
-    owner: string;
-    repo: string;
-    defaultLabels: string;
-}
+export interface FinalizeServiceEnv extends QueueHandlerEnv, RepositoryConfig {}
+
+export interface VoiceRefinerServiceEnv extends QueueHandlerEnv, RepositoryConfig {}
 
 /**
  * Wires up the VoiceCommentRefinerService for the SQS queue handler.
  */
-export function createVoiceCommentRefiner(env: QueueHandlerEnv): VoiceCommentRefinerService {
+export function createVoiceCommentRefiner(env: VoiceRefinerServiceEnv): VoiceCommentRefinerService {
     if (!env.githubPrivateKeySecretArn) {
         throw new Error("Missing env: GITHUB_PRIVATE_KEY_SECRET_ARN");
     }
@@ -121,7 +119,7 @@ export function createVoiceCommentRefiner(env: QueueHandlerEnv): VoiceCommentRef
         env.openAiModel,
         env.openAiSystemPrompt,
     );
-    return new VoiceCommentRefinerService(auth, github, textRefiner);
+    return new VoiceCommentRefinerService(auth, github, textRefiner, { owner: env.owner, repo: env.repo, defaultLabels: env.defaultLabels });
 }
 
 /**

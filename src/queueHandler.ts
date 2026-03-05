@@ -22,7 +22,12 @@ if (!githubRepo) {
     throw new Error("Environment variable GITHUB_REPO is required but was not set.");
 }
 
-const refiner = createVoiceCommentRefiner(env);
+const refiner = createVoiceCommentRefiner({
+    ...env,
+    owner: githubOwner,
+    repo: githubRepo,
+    defaultLabels: process.env.DEFAULT_LABELS || "thoughtlog",
+});
 const finalizer = createFinalizeService({
     ...env,
     owner: githubOwner,
