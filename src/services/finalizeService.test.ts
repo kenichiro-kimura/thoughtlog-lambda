@@ -44,7 +44,6 @@ const message: FinalizeMessage = {
     repo: "repo",
     dateKey: "2024-03-01",
     labels: ["thoughtlog"],
-    issueNumber: 10,
 };
 
 // ── IssueFinalizeService ───────────────────────────────────────────────────────
@@ -61,7 +60,9 @@ describe("IssueFinalizeService.finalize", () => {
 
         await svc.finalize(message);
 
-        expect(github.findDailyIssue).not.toHaveBeenCalled();
+        expect(github.findDailyIssue).toHaveBeenCalledWith({
+            owner: "owner", repo: "repo", dateKey: "2024-03-01", labels: ["thoughtlog"], token: "tok",
+        });
         expect(github.getIssueComments).toHaveBeenCalledWith({
             owner: "owner", repo: "repo", issueNumber: 10, token: "tok",
         });
@@ -71,6 +72,14 @@ describe("IssueFinalizeService.finalize", () => {
         expect(github.closeIssue).toHaveBeenCalledWith({
             owner: "owner", repo: "repo", issueNumber: 10, token: "tok",
         });
+    });
+
+    it("throws when issue is not found for the given date", async () => {
+        const github = makeGitHub({ findDailyIssue: vi.fn().mockResolvedValue(null) });
+        const svc = new IssueFinalizeService(makeAuth(), github, makeTextRefiner());
+
+        await expect(svc.finalize(message)).rejects.toThrow("Issue not found for date: 2024-03-01");
+        expect(github.getIssueComments).not.toHaveBeenCalled();
     });
 
     it("posts a content comment then a finalize datetime comment before closing", async () => {
