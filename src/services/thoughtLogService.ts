@@ -139,14 +139,9 @@ export class ThoughtLogService implements IThoughtLogService {
         if (!this.queueService) {
             throw new Error("Queue service not configured for finalize");
         }
-        const { owner, repo } = this.config;
-        const labels = parseLabels(this.config.defaultLabels, []);
         const message: FinalizeMessage = {
             type: "finalize",
-            owner,
-            repo,
             dateKey,
-            labels,
         };
         await this.queueService.sendMessage(JSON.stringify(message));
         return { kind: "queued", date: dateKey };

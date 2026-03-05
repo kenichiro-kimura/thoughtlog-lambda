@@ -266,10 +266,7 @@ describe("ThoughtLogService.updateLog", () => {
         await service.updateLog("2024-01-15");
         const msg = JSON.parse((queue.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0][0]);
         expect(msg.type).toBe("finalize");
-        expect(msg.owner).toBe("owner");
-        expect(msg.repo).toBe("repo");
         expect(msg.dateKey).toBe("2024-01-15");
-        expect(Array.isArray(msg.labels)).toBe(true);
         expect(msg.issueNumber).toBeUndefined();
     });
 });

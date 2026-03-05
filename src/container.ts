@@ -88,6 +88,12 @@ export interface QueueHandlerEnv {
     finalizeOpenAiSystemPrompt: string | undefined;
 }
 
+export interface FinalizeServiceEnv extends QueueHandlerEnv {
+    owner: string;
+    repo: string;
+    defaultLabels: string;
+}
+
 /**
  * Wires up the VoiceCommentRefinerService for the SQS queue handler.
  */
@@ -121,7 +127,7 @@ export function createVoiceCommentRefiner(env: QueueHandlerEnv): VoiceCommentRef
 /**
  * Wires up the IssueFinalizeService for the SQS queue handler.
  */
-export function createFinalizeService(env: QueueHandlerEnv): IssueFinalizeService {
+export function createFinalizeService(env: FinalizeServiceEnv): IssueFinalizeService {
     if (!env.githubPrivateKeySecretArn) {
         throw new Error("Missing env: GITHUB_PRIVATE_KEY_SECRET_ARN");
     }
@@ -146,5 +152,5 @@ export function createFinalizeService(env: QueueHandlerEnv): IssueFinalizeServic
         env.finalizeOpenAiModel,
         finalizeSystemPrompt,
     );
-    return new IssueFinalizeService(auth, github, textRefiner);
+    return new IssueFinalizeService(auth, github, textRefiner, { owner: env.owner, repo: env.repo, defaultLabels: env.defaultLabels });
 }

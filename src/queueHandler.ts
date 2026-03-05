@@ -23,7 +23,12 @@ if (!githubRepo) {
 }
 
 const refiner = createVoiceCommentRefiner(env);
-const finalizer = createFinalizeService(env);
+const finalizer = createFinalizeService({
+    ...env,
+    owner: githubOwner,
+    repo: githubRepo,
+    defaultLabels: process.env.DEFAULT_LABELS || "thoughtlog",
+});
 const thoughtLog = createThoughtLogService({
     owner: githubOwner,
     repo: githubRepo,

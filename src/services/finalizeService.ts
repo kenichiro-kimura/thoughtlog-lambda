@@ -3,6 +3,13 @@ import type { IGitHubService } from "../interfaces/IGitHubService";
 import type { ITextRefinerService } from "../interfaces/ITextRefinerService";
 import type { FinalizeMessage } from "../types";
 import { nowJstDateTime } from "../utils/date";
+import { parseLabels } from "../utils/format";
+
+export interface FinalizeConfig {
+    owner: string;
+    repo: string;
+    defaultLabels: string;
+}
 
 /**
  * Appended to the user-supplied system prompt so that OpenAI always returns
@@ -28,10 +35,13 @@ export class IssueFinalizeService {
         private readonly auth: IAuthService,
         private readonly github: IGitHubService,
         private readonly textRefiner: ITextRefinerService,
+        private readonly config: FinalizeConfig,
     ) {}
 
     async finalize(message: FinalizeMessage): Promise<void> {
-        const { owner, repo, dateKey, labels } = message;
+        const { dateKey } = message;
+        const { owner, repo } = this.config;
+        const labels = parseLabels(this.config.defaultLabels, []);
         const token = await this.auth.getInstallationToken();
 
         const issue = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });

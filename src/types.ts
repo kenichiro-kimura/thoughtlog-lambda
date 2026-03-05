@@ -75,10 +75,7 @@ export interface VoiceRefineMessage {
 /** Message payload sent to the queue for async final polish of a daily log. */
 export interface FinalizeMessage {
     type: "finalize";
-    owner: string;
-    repo: string;
     dateKey: string;
-    labels: string[];
 }
 
 /** Message payload sent to the queue for async issue/comment creation. */
