@@ -78,7 +78,7 @@ describe("IssueFinalizeService.finalize", () => {
         const github = makeGitHub({ findDailyIssue: vi.fn().mockResolvedValue(null) });
         const svc = new IssueFinalizeService(makeAuth(), github, makeTextRefiner());
 
-        await expect(svc.finalize(message)).rejects.toThrow("Issue not found for date: 2024-03-01");
+        await expect(svc.finalize(message)).rejects.toThrow("Issue not found for owner=owner repo=repo dateKey=2024-03-01 labels=thoughtlog");
         expect(github.getIssueComments).not.toHaveBeenCalled();
     });
 
