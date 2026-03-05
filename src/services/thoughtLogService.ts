@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Payload, GitHubIssue, CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, UpdateLogOutcome, VoiceRefineMessage, FinalizeMessage, CreateEntryMessage } from "../types";
+import type { Payload, GitHubIssue, RepositoryConfig, CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, UpdateLogOutcome, VoiceRefineMessage, FinalizeMessage, CreateEntryMessage } from "../types";
 import { getDateKeyJst } from "../utils/date";
 import { parseLabels, formatEntry } from "../utils/format";
 import type { IAuthService } from "../interfaces/IAuthService";
@@ -11,12 +11,6 @@ import type { IQueueService } from "../interfaces/IQueueService";
 export type { IThoughtLogService };
 export type { CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, UpdateLogOutcome };
 
-export interface ThoughtLogConfig {
-    owner: string;
-    repo: string;
-    defaultLabels: string;
-}
-
 /**
  * Orchestrates ThoughtLog business logic.
  * Depends only on interfaces so all external I/O can be replaced with test doubles.
@@ -26,7 +20,7 @@ export class ThoughtLogService implements IThoughtLogService {
         private readonly auth: IAuthService,
         private readonly github: IGitHubService,
         private readonly idempotency: IIdempotencyService,
-        private readonly config: ThoughtLogConfig,
+        private readonly config: RepositoryConfig,
         private readonly queueService?: IQueueService,
         private readonly createEntryQueueService?: IQueueService,
     ) {}
@@ -84,8 +78,6 @@ export class ThoughtLogService implements IThoughtLogService {
             if (payload.source === "voice" && this.queueService) {
                 const message: VoiceRefineMessage = {
                     type: "voice-polish",
-                    owner,
-                    repo,
                     issueNumber: issue.number,
                     commentId: comment.id,
                 };
@@ -139,14 +131,9 @@ export class ThoughtLogService implements IThoughtLogService {
         if (!this.queueService) {
             throw new Error("Queue service not configured for finalize");
         }
-        const { owner, repo } = this.config;
-        const labels = parseLabels(this.config.defaultLabels, []);
         const message: FinalizeMessage = {
             type: "finalize",
-            owner,
-            repo,
             dateKey,
-            labels,
         };
         await this.queueService.sendMessage(JSON.stringify(message));
         return { kind: "queued", date: dateKey };

@@ -1,7 +1,7 @@
 import type { IAuthService } from "../interfaces/IAuthService";
 import type { IGitHubService } from "../interfaces/IGitHubService";
 import type { ITextRefinerService } from "../interfaces/ITextRefinerService";
-import type { VoiceRefineMessage } from "../types";
+import type { VoiceRefineMessage, RepositoryConfig } from "../types";
 
 /**
  * Parses a timestamp header from an issue comment body.
@@ -26,10 +26,12 @@ export class VoiceCommentRefinerService {
         private readonly auth: IAuthService,
         private readonly github: IGitHubService,
         private readonly textRefiner: ITextRefinerService,
+        private readonly config: RepositoryConfig,
     ) {}
 
     async refineComment(message: VoiceRefineMessage): Promise<void> {
-        const { owner, repo, commentId } = message;
+        const { commentId } = message;
+        const { owner, repo } = this.config;
         const token = await this.auth.getInstallationToken();
 
         const comment = await this.github.getComment({ owner, repo, commentId, token });

@@ -61,13 +61,15 @@ function makeTextRefiner(refined = "refined text"): ITextRefinerService {
     return { refine: vi.fn().mockResolvedValue(refined) };
 }
 
+const config = { owner: "owner", repo: "repo", defaultLabels: "thoughtlog" };
+
 describe("VoiceCommentRefinerService.refineComment", () => {
-    const message = { owner: "owner", repo: "repo", issueNumber: 1, commentId: 55 };
+    const message = { type: "voice-polish" as const, issueNumber: 1, commentId: 55 };
 
     it("fetches comment, refines body, and updates comment", async () => {
         const github = makeGitHub();
         const textRefiner = makeTextRefiner("refined text");
-        const svc = new VoiceCommentRefinerService(makeAuth(), github, textRefiner);
+        const svc = new VoiceCommentRefinerService(makeAuth(), github, textRefiner, config);
 
         await svc.refineComment(message);
 
@@ -83,7 +85,7 @@ describe("VoiceCommentRefinerService.refineComment", () => {
             getComment: vi.fn().mockResolvedValue({ id: 55, body: "## 22:45\noriginal voice\n" }),
         });
         const textRefiner = makeTextRefiner("polished text");
-        const svc = new VoiceCommentRefinerService(makeAuth(), github, textRefiner);
+        const svc = new VoiceCommentRefinerService(makeAuth(), github, textRefiner, config);
 
         await svc.refineComment(message);
 
@@ -96,7 +98,7 @@ describe("VoiceCommentRefinerService.refineComment", () => {
             getComment: vi.fn().mockResolvedValue({ id: 55, body: "plain body" }),
         });
         const textRefiner = makeTextRefiner("refined plain");
-        const svc = new VoiceCommentRefinerService(makeAuth(), github, textRefiner);
+        const svc = new VoiceCommentRefinerService(makeAuth(), github, textRefiner, config);
 
         await svc.refineComment(message);
 
@@ -109,7 +111,7 @@ describe("VoiceCommentRefinerService.refineComment", () => {
             getComment: vi.fn().mockResolvedValue({ id: 55, body: undefined }),
         });
         const textRefiner = makeTextRefiner("result");
-        const svc = new VoiceCommentRefinerService(makeAuth(), github, textRefiner);
+        const svc = new VoiceCommentRefinerService(makeAuth(), github, textRefiner, config);
 
         await svc.refineComment(message);
 

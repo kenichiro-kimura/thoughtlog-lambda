@@ -63,11 +63,16 @@ export type GetLogOutcome =
 export type UpdateLogOutcome =
     | { kind: "queued"; date: string };
 
+/** Shared repository configuration used across services. */
+export interface RepositoryConfig {
+    owner: string;
+    repo: string;
+    defaultLabels: string;
+}
+
 /** Message payload sent to the queue for async voice comment refinement. */
 export interface VoiceRefineMessage {
     type: "voice-polish";
-    owner: string;
-    repo: string;
     issueNumber: number;
     commentId: number;
 }
@@ -75,10 +80,7 @@ export interface VoiceRefineMessage {
 /** Message payload sent to the queue for async final polish of a daily log. */
 export interface FinalizeMessage {
     type: "finalize";
-    owner: string;
-    repo: string;
     dateKey: string;
-    labels: string[];
 }
 
 /** Message payload sent to the queue for async issue/comment creation. */

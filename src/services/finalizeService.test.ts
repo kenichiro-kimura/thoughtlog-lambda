@@ -38,12 +38,11 @@ function makeTextRefiner(response = validOpenAiResponse): ITextRefinerService {
     return { refine: vi.fn().mockResolvedValue(response) };
 }
 
+const config = { owner: "owner", repo: "repo", defaultLabels: "thoughtlog" };
+
 const message: FinalizeMessage = {
     type: "finalize",
-    owner: "owner",
-    repo: "repo",
     dateKey: "2024-03-01",
-    labels: ["thoughtlog"],
 };
 
 // ── IssueFinalizeService ───────────────────────────────────────────────────────
@@ -56,7 +55,7 @@ describe("IssueFinalizeService.finalize", () => {
     it("fetches comments, calls refiner, updates and closes the issue", async () => {
         const github = makeGitHub();
         const textRefiner = makeTextRefiner();
-        const svc = new IssueFinalizeService(makeAuth(), github, textRefiner);
+        const svc = new IssueFinalizeService(makeAuth(), github, textRefiner, config);
 
         await svc.finalize(message);
 
@@ -76,7 +75,7 @@ describe("IssueFinalizeService.finalize", () => {
 
     it("throws when issue is not found for the given date", async () => {
         const github = makeGitHub({ findDailyIssue: vi.fn().mockResolvedValue(null) });
-        const svc = new IssueFinalizeService(makeAuth(), github, makeTextRefiner());
+        const svc = new IssueFinalizeService(makeAuth(), github, makeTextRefiner(), config);
 
         await expect(svc.finalize(message)).rejects.toThrow("Issue not found for owner=owner repo=repo dateKey=2024-03-01 labels=thoughtlog");
         expect(github.getIssueComments).not.toHaveBeenCalled();
@@ -85,7 +84,7 @@ describe("IssueFinalizeService.finalize", () => {
     it("posts a content comment then a finalize datetime comment before closing", async () => {
         vi.spyOn(Date, "now").mockReturnValue(new Date("2024-03-01T10:00:00Z").getTime());
         const github = makeGitHub();
-        const svc = new IssueFinalizeService(makeAuth(), github, makeTextRefiner());
+        const svc = new IssueFinalizeService(makeAuth(), github, makeTextRefiner(), config);
 
         await svc.finalize(message);
 
@@ -100,7 +99,7 @@ describe("IssueFinalizeService.finalize", () => {
     it("prepends dateKey to title when not already present", async () => {
         const github = makeGitHub();
         const textRefiner = makeTextRefiner(JSON.stringify({ title: "Daily summary", body: "body text" }));
-        const svc = new IssueFinalizeService(makeAuth(), github, textRefiner);
+        const svc = new IssueFinalizeService(makeAuth(), github, textRefiner, config);
 
         await svc.finalize(message);
 
@@ -112,7 +111,7 @@ describe("IssueFinalizeService.finalize", () => {
     it("does not double-prepend dateKey when title already starts with it", async () => {
         const github = makeGitHub();
         const textRefiner = makeTextRefiner(JSON.stringify({ title: "2024-03-01 Summary", body: "body" }));
-        const svc = new IssueFinalizeService(makeAuth(), github, textRefiner);
+        const svc = new IssueFinalizeService(makeAuth(), github, textRefiner, config);
 
         await svc.finalize(message);
 
@@ -123,7 +122,7 @@ describe("IssueFinalizeService.finalize", () => {
     it("concatenates comment bodies separated by blank line before passing to refiner", async () => {
         const github = makeGitHub();
         const textRefiner = makeTextRefiner();
-        const svc = new IssueFinalizeService(makeAuth(), github, textRefiner);
+        const svc = new IssueFinalizeService(makeAuth(), github, textRefiner, config);
 
         await svc.finalize(message);
 
@@ -137,7 +136,7 @@ describe("IssueFinalizeService.finalize", () => {
             getIssueComments: vi.fn().mockResolvedValue([{ id: 1, body: undefined }]),
         });
         const textRefiner = makeTextRefiner();
-        const svc = new IssueFinalizeService(makeAuth(), github, textRefiner);
+        const svc = new IssueFinalizeService(makeAuth(), github, textRefiner, config);
 
         await svc.finalize(message);
 
@@ -147,16 +146,28 @@ describe("IssueFinalizeService.finalize", () => {
 
     it("throws when OpenAI response is not valid JSON", async () => {
         const textRefiner = makeTextRefiner("not valid json");
-        const svc = new IssueFinalizeService(makeAuth(), makeGitHub(), textRefiner);
+        const svc = new IssueFinalizeService(makeAuth(), makeGitHub(), textRefiner, config);
 
         await expect(svc.finalize(message)).rejects.toThrow("Failed to parse OpenAI response as JSON");
     });
 
     it("throws when OpenAI JSON is missing required fields", async () => {
         const textRefiner = makeTextRefiner(JSON.stringify({ title: "only title" }));
-        const svc = new IssueFinalizeService(makeAuth(), makeGitHub(), textRefiner);
+        const svc = new IssueFinalizeService(makeAuth(), makeGitHub(), textRefiner, config);
 
         await expect(svc.finalize(message)).rejects.toThrow("OpenAI response missing required fields");
+    });
+
+    it("passes all labels derived from defaultLabels to findDailyIssue", async () => {
+        const multiLabelConfig = { owner: "owner", repo: "repo", defaultLabels: "thoughtlog,daily,review" };
+        const github = makeGitHub();
+        const svc = new IssueFinalizeService(makeAuth(), github, makeTextRefiner(), multiLabelConfig);
+
+        await svc.finalize(message);
+
+        expect(github.findDailyIssue).toHaveBeenCalledWith(
+            expect.objectContaining({ labels: ["thoughtlog", "daily", "review"] }),
+        );
     });
 });
 
