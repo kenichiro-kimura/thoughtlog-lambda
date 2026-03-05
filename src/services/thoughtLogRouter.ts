@@ -36,9 +36,6 @@ export class ThoughtLogRouter {
         if (method === "PUT" && dateParam) {
             try {
                 const outcome = await this.service.updateLog(dateParam);
-                if (outcome.kind === "not_found") {
-                    return jsonResponse(HTTP_STATUS.NOT_FOUND, { ok: false, error: "not_found", date: outcome.date });
-                }
                 return jsonResponse(HTTP_STATUS.ACCEPTED, { ok: true, queued: true, date: outcome.date });
             } catch (e) {
                 return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: e instanceof Error ? e.message : String(e) });

@@ -31,8 +31,17 @@ export class IssueFinalizeService {
     ) {}
 
     async finalize(message: FinalizeMessage): Promise<void> {
-        const { owner, repo, dateKey, issueNumber } = message;
+        const { owner, repo, dateKey, labels } = message;
         const token = await this.auth.getInstallationToken();
+
+        const issue = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
+        const labelsDescription = Array.isArray(labels) && labels.length > 0 ? labels.join(",") : "(none)";
+        if (!issue) {
+            throw new Error(
+                `Issue not found for owner=${owner} repo=${repo} dateKey=${dateKey} labels=${labelsDescription}`,
+            );
+        }
+        const issueNumber = issue.number;
 
         const comments = await this.github.getIssueComments({ owner, repo, issueNumber, token });
         const combined = comments.map((c) => c.body ?? "").join("\n\n");

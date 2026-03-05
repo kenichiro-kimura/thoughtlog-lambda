@@ -61,8 +61,7 @@ export type GetLogOutcome =
     | { kind: "not_found"; date: string };
 
 export type UpdateLogOutcome =
-    | { kind: "queued"; date: string }
-    | { kind: "not_found"; date: string };
+    | { kind: "queued"; date: string };
 
 /** Message payload sent to the queue for async voice comment refinement. */
 export interface VoiceRefineMessage {
@@ -80,7 +79,6 @@ export interface FinalizeMessage {
     repo: string;
     dateKey: string;
     labels: string[];
-    issueNumber: number;
 }
 
 /** Message payload sent to the queue for async issue/comment creation. */

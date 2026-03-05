@@ -114,16 +114,6 @@ describe("ThoughtLogRouter PUT /log/:date", () => {
         expect(JSON.parse(response.body)).toMatchObject({ ok: true, queued: true, date: "2024-01-15" });
     });
 
-    it("returns 404 when issue does not exist", async () => {
-        service.updateLog = vi.fn().mockResolvedValue({ kind: "not_found", date: "2024-01-15" });
-        const request = makeRequest({
-            getMethod: vi.fn().mockReturnValue("PUT"),
-            getDateParam: vi.fn().mockReturnValue("2024-01-15"),
-        });
-        const response = await router.handle(request);
-        expect(response.statusCode).toBe(404);
-    });
-
     it("returns 500 when updateLog throws", async () => {
         service.updateLog = vi.fn().mockRejectedValue(new Error("db error"));
         const request = makeRequest({
