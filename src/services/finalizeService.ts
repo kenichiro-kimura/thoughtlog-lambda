@@ -35,8 +35,11 @@ export class IssueFinalizeService {
         const token = await this.auth.getInstallationToken();
 
         const issue = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
+        const labelsDescription = Array.isArray(labels) && labels.length > 0 ? labels.join(",") : "(none)";
         if (!issue) {
-            throw new Error(`Issue not found for date: ${dateKey}`);
+            throw new Error(
+                `Issue not found for owner=${owner} repo=${repo} dateKey=${dateKey} labels=${labelsDescription}`,
+            );
         }
         const issueNumber = issue.number;
 
