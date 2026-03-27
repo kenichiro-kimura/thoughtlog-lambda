@@ -27,7 +27,13 @@ function makeService(overrides: Partial<IThoughtLogService> = {}): IThoughtLogSe
             comment_id: 99,
         }),
         enqueueEntry: vi.fn().mockResolvedValue({ kind: "queued" }),
-        getLog: vi.fn().mockResolvedValue({ kind: "found", body: "## 19:30\nhello\n" }),
+        getLog: vi.fn().mockResolvedValue({
+            kind: "found",
+            id: "issue-id-42",
+            date: "2024-01-15",
+            title: "2024-01-15",
+            links: { body: "/log/2024-01-15/body", comments: "/log/2024-01-15/comments" },
+        }),
         updateLog: vi.fn().mockResolvedValue({
             kind: "queued",
             date: "2024-01-15",
@@ -47,15 +53,21 @@ describe("ThoughtLogRouter GET /log/:date", () => {
         router = new ThoughtLogRouter(service);
     });
 
-    it("returns 200 with plain text body when issue is found", async () => {
+    it("returns 200 with JSON summary when issue is found", async () => {
         const request = makeRequest({
             getMethod: vi.fn().mockReturnValue("GET"),
             getDateParam: vi.fn().mockReturnValue("2024-01-15"),
         });
         const response = await router.handle(request);
         expect(response.statusCode).toBe(200);
-        expect(response.contentType).toBe("text/plain; charset=utf-8");
-        expect(response.body).toContain("hello");
+        expect(response.contentType).toBeUndefined();
+        const body = JSON.parse(response.body);
+        expect(body).toMatchObject({
+            id: "issue-id-42",
+            date: "2024-01-15",
+            title: "2024-01-15",
+            links: { body: "/log/2024-01-15/body", comments: "/log/2024-01-15/comments" },
+        });
     });
 
     it("returns 404 when the daily issue does not exist", async () => {

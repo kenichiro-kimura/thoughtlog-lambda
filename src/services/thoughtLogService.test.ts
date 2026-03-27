@@ -211,12 +211,16 @@ describe("ThoughtLogService.createEntry", () => {
 // ── getLog ─────────────────────────────────────────────────────────────────────
 
 describe("ThoughtLogService.getLog", () => {
-    it("returns found outcome with concatenated comment bodies", async () => {
+    it("returns found outcome with id, date, title and links", async () => {
         const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config);
         const outcome = await service.getLog("2024-01-15");
         expect(outcome.kind).toBe("found");
         if (outcome.kind === "found") {
-            expect(outcome.body).toContain("hello");
+            expect(outcome.id).toBe("issue-id-42");
+            expect(outcome.date).toBe("2024-01-15");
+            expect(outcome.title).toBe("2024-01-15");
+            expect(outcome.links.body).toBe("/log/2024-01-15/body");
+            expect(outcome.links.comments).toBe("/log/2024-01-15/comments");
         }
     });
 

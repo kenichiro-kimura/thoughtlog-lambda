@@ -57,7 +57,7 @@ export type EnqueueEntryOutcome =
     | { kind: "too_large" };
 
 export type GetLogOutcome =
-    | { kind: "found"; body: string }
+    | { kind: "found"; id: string; date: string; title: string; links: { body: string; comments: string } }
     | { kind: "not_found"; date: string };
 
 export type UpdateLogOutcome =

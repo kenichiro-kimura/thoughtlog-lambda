@@ -123,8 +123,16 @@ export class ThoughtLogService implements IThoughtLogService {
         const issue = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
         if (!issue) return { kind: "not_found", date: dateKey };
 
-        const comments = await this.github.getIssueComments({ owner, repo, issueNumber: issue.number, token });
-        return { kind: "found", body: comments.map((c) => c.body || "").join("\n") };
+        return {
+            kind: "found",
+            id: `issue-id-${issue.number}`,
+            date: dateKey,
+            title: issue.title ?? dateKey,
+            links: {
+                body: `/log/${dateKey}/body`,
+                comments: `/log/${dateKey}/comments`,
+            },
+        };
     }
 
     async updateLog(dateKey: string): Promise<UpdateLogOutcome> {

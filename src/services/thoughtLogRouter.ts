@@ -26,7 +26,12 @@ export class ThoughtLogRouter {
                 if (outcome.kind === "not_found") {
                     return jsonResponse(HTTP_STATUS.NOT_FOUND, { ok: false, error: "not_found", date: outcome.date });
                 }
-                return { statusCode: HTTP_STATUS.OK, contentType: "text/plain; charset=utf-8", body: outcome.body };
+                return jsonResponse(HTTP_STATUS.OK, {
+                    id: outcome.id,
+                    date: outcome.date,
+                    title: outcome.title,
+                    links: outcome.links,
+                });
             } catch (e) {
                 return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: e instanceof Error ? e.message : String(e) });
             }
