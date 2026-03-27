@@ -216,13 +216,15 @@ describe("GitHubApiService.findIssueByTitlePrefix", () => {
         expect(result).toBeNull();
     });
 
-    it("encodes the title prefix in the search query URL", async () => {
+    it("encodes the title prefix in the search query URL and sorts by updated descending", async () => {
         const http = makeHttp({ items: [] });
         const svc = new GitHubApiService(http);
         await svc.findIssueByTitlePrefix({ owner, repo, titlePrefix: "2024-01-15 ", token });
         const [url] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
         expect(url).toContain("search/issues");
         expect(url).toContain(encodeURIComponent("2024-01-15 "));
+        expect(url).toContain("sort=updated");
+        expect(url).toContain("order=desc");
     });
 });
 

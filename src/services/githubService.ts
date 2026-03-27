@@ -36,7 +36,7 @@ export class GitHubApiService implements IGitHubService {
             `"${titlePrefix}"`,
         ].join(" ");
 
-        const url = `https://api.github.com/search/issues?q=${encodeURIComponent(q)}&per_page=5`;
+        const url = `https://api.github.com/search/issues?q=${encodeURIComponent(q)}&sort=updated&order=desc&per_page=5`;
         const result = await this.httpClient(url, { token }) as GitHubSearchResult;
 
         const items = result?.items ?? [];
