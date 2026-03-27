@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Payload, GitHubIssue, RepositoryConfig, CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, UpdateLogOutcome, VoiceRefineMessage, FinalizeMessage, CreateEntryMessage } from "../types";
+import type { Payload, GitHubIssue, RepositoryConfig, CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, GetLogBodyOutcome, GetLogCommentsOutcome, UpdateLogOutcome, VoiceRefineMessage, FinalizeMessage, CreateEntryMessage } from "../types";
 import { getDateKeyJst } from "../utils/date";
 import { parseLabels, formatEntry } from "../utils/format";
 import type { IAuthService } from "../interfaces/IAuthService";
@@ -9,7 +9,7 @@ import type { IThoughtLogService } from "../interfaces/IThoughtLogService";
 import type { IQueueService } from "../interfaces/IQueueService";
 
 export type { IThoughtLogService };
-export type { CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, UpdateLogOutcome };
+export type { CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, GetLogBodyOutcome, GetLogCommentsOutcome, UpdateLogOutcome };
 
 /**
  * Orchestrates ThoughtLog business logic.
@@ -133,6 +133,30 @@ export class ThoughtLogService implements IThoughtLogService {
                 comments: `/log/${dateKey}/comments`,
             },
         };
+    }
+
+    async getLogBody(dateKey: string): Promise<GetLogBodyOutcome> {
+        const { owner, repo } = this.config;
+        const token = await this.auth.getInstallationToken();
+        const labels = parseLabels(this.config.defaultLabels, []);
+
+        const found = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
+        if (!found) return { kind: "not_found", date: dateKey };
+
+        const issue = await this.github.getIssue({ owner, repo, issueNumber: found.number, token });
+        return { kind: "found", body: issue.body ?? "" };
+    }
+
+    async getLogComments(dateKey: string): Promise<GetLogCommentsOutcome> {
+        const { owner, repo } = this.config;
+        const token = await this.auth.getInstallationToken();
+        const labels = parseLabels(this.config.defaultLabels, []);
+
+        const issue = await this.github.findDailyIssue({ owner, repo, dateKey, labels, token });
+        if (!issue) return { kind: "not_found", date: dateKey };
+
+        const comments = await this.github.getIssueComments({ owner, repo, issueNumber: issue.number, token });
+        return { kind: "found", comments: comments.map((c) => c.body ?? "") };
     }
 
     async updateLog(dateKey: string): Promise<UpdateLogOutcome> {
