@@ -119,6 +119,33 @@ describe("LambdaHttpRequest.getDateParam", () => {
     });
 });
 
+describe("LambdaHttpRequest.getSubResource", () => {
+    it("extracts date and resource 'body' from a /log/yyyy-mm-dd/body path", () => {
+        const req = new LambdaHttpRequest(makeV2Event({ rawPath: "/log/2024-01-15/body" }));
+        expect(req.getSubResource()).toEqual({ date: "2024-01-15", resource: "body" });
+    });
+
+    it("extracts date and resource 'comments' from a /log/yyyy-mm-dd/comments path", () => {
+        const req = new LambdaHttpRequest(makeV2Event({ rawPath: "/log/2024-01-15/comments" }));
+        expect(req.getSubResource()).toEqual({ date: "2024-01-15", resource: "comments" });
+    });
+
+    it("returns null when path matches /log/yyyy-mm-dd exactly", () => {
+        const req = new LambdaHttpRequest(makeV2Event({ rawPath: "/log/2024-01-15" }));
+        expect(req.getSubResource()).toBeNull();
+    });
+
+    it("returns null when path does not match", () => {
+        const req = new LambdaHttpRequest(makeV2Event({ rawPath: "/" }));
+        expect(req.getSubResource()).toBeNull();
+    });
+
+    it("returns null for an unknown sub-resource segment", () => {
+        const req = new LambdaHttpRequest(makeV2Event({ rawPath: "/log/2024-01-15/unknown" }));
+        expect(req.getSubResource()).toBeNull();
+    });
+});
+
 describe("LambdaHttpRequest.getRawBody", () => {
     it("returns the raw string body", () => {
         const req = new LambdaHttpRequest(makeV2Event({ body: '{"raw":"hello"}' }));

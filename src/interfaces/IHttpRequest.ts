@@ -11,6 +11,12 @@ export interface IHttpRequest {
      */
     getDateParam(): string | null;
     /**
+     * Extracts the date and sub-resource from paths matching /log/yyyy-mm-dd/body
+     * or /log/yyyy-mm-dd/comments.
+     * Returns null when the path does not match.
+     */
+    getSubResource(): { date: string; resource: "body" | "comments" } | null;
+    /**
      * Parses and returns the request body as a Payload object.
      * Returns an empty Payload when there is no body.
      * Throws a SyntaxError on malformed JSON.

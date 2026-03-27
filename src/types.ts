@@ -35,6 +35,7 @@ export interface GitHubIssue {
     number: number;
     html_url?: string;
     title?: string;
+    body?: string;
 }
 
 export interface GitHubComment {
@@ -57,7 +58,15 @@ export type EnqueueEntryOutcome =
     | { kind: "too_large" };
 
 export type GetLogOutcome =
+    | { kind: "found"; id: string; date: string; title: string; links: { body: string; comments: string } }
+    | { kind: "not_found"; date: string };
+
+export type GetLogBodyOutcome =
     | { kind: "found"; body: string }
+    | { kind: "not_found"; date: string };
+
+export type GetLogCommentsOutcome =
+    | { kind: "found"; comments: string[] }
     | { kind: "not_found"; date: string };
 
 export type UpdateLogOutcome =

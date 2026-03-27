@@ -11,6 +11,7 @@ function makeRequest(overrides: Partial<IHttpRequest> = {}): IHttpRequest {
         getMethod: vi.fn().mockReturnValue("POST"),
         getRawPath: vi.fn().mockReturnValue("/"),
         getDateParam: vi.fn().mockReturnValue(null),
+        getSubResource: vi.fn().mockReturnValue(null),
         getPayload: vi.fn().mockReturnValue({ request_id: "req-1", raw: "hello" } as Payload),
         getRawBody: vi.fn().mockReturnValue(""),
         ...overrides,
@@ -27,7 +28,15 @@ function makeService(overrides: Partial<IThoughtLogService> = {}): IThoughtLogSe
             comment_id: 99,
         }),
         enqueueEntry: vi.fn().mockResolvedValue({ kind: "queued" }),
-        getLog: vi.fn().mockResolvedValue({ kind: "found", body: "## 19:30\nhello\n" }),
+        getLog: vi.fn().mockResolvedValue({
+            kind: "found",
+            id: "issue-id-42",
+            date: "2024-01-15",
+            title: "2024-01-15",
+            links: { body: "/log/2024-01-15/body", comments: "/log/2024-01-15/comments" },
+        }),
+        getLogBody: vi.fn().mockResolvedValue({ kind: "found", body: "# 2024-01-15\n\nSummary text." }),
+        getLogComments: vi.fn().mockResolvedValue({ kind: "found", comments: ["## 19:30\nhello\n", "## 20:00\nworld\n"] }),
         updateLog: vi.fn().mockResolvedValue({
             kind: "queued",
             date: "2024-01-15",
@@ -47,15 +56,21 @@ describe("ThoughtLogRouter GET /log/:date", () => {
         router = new ThoughtLogRouter(service);
     });
 
-    it("returns 200 with plain text body when issue is found", async () => {
+    it("returns 200 with JSON summary when issue is found", async () => {
         const request = makeRequest({
             getMethod: vi.fn().mockReturnValue("GET"),
             getDateParam: vi.fn().mockReturnValue("2024-01-15"),
         });
         const response = await router.handle(request);
         expect(response.statusCode).toBe(200);
-        expect(response.contentType).toBe("text/plain; charset=utf-8");
-        expect(response.body).toContain("hello");
+        expect(response.contentType).toBeUndefined();
+        const body = JSON.parse(response.body);
+        expect(body).toMatchObject({
+            id: "issue-id-42",
+            date: "2024-01-15",
+            title: "2024-01-15",
+            links: { body: "/log/2024-01-15/body", comments: "/log/2024-01-15/comments" },
+        });
     });
 
     it("returns 404 when the daily issue does not exist", async () => {
@@ -89,6 +104,96 @@ describe("ThoughtLogRouter GET /log/:date", () => {
         const response = await router.handle(request);
         expect(response.statusCode).toBe(500);
         expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "plain string error" });
+    });
+});
+
+// ── GET /log/:date/body ────────────────────────────────────────────────────────
+
+describe("ThoughtLogRouter GET /log/:date/body", () => {
+    let router: ThoughtLogRouter;
+    let service: IThoughtLogService;
+
+    beforeEach(() => {
+        service = makeService();
+        router = new ThoughtLogRouter(service);
+    });
+
+    it("returns 200 with body when issue is found", async () => {
+        const request = makeRequest({
+            getMethod: vi.fn().mockReturnValue("GET"),
+            getSubResource: vi.fn().mockReturnValue({ date: "2024-01-15", resource: "body" }),
+        });
+        const response = await router.handle(request);
+        expect(response.statusCode).toBe(200);
+        const parsed = JSON.parse(response.body);
+        expect(parsed).toMatchObject({ body: "# 2024-01-15\n\nSummary text." });
+    });
+
+    it("returns 404 when the daily issue does not exist", async () => {
+        service.getLogBody = vi.fn().mockResolvedValue({ kind: "not_found", date: "2024-01-15" });
+        const request = makeRequest({
+            getMethod: vi.fn().mockReturnValue("GET"),
+            getSubResource: vi.fn().mockReturnValue({ date: "2024-01-15", resource: "body" }),
+        });
+        const response = await router.handle(request);
+        expect(response.statusCode).toBe(404);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "not_found" });
+    });
+
+    it("returns 500 when getLogBody throws", async () => {
+        service.getLogBody = vi.fn().mockRejectedValue(new Error("network error"));
+        const request = makeRequest({
+            getMethod: vi.fn().mockReturnValue("GET"),
+            getSubResource: vi.fn().mockReturnValue({ date: "2024-01-15", resource: "body" }),
+        });
+        const response = await router.handle(request);
+        expect(response.statusCode).toBe(500);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "network error" });
+    });
+});
+
+// ── GET /log/:date/comments ────────────────────────────────────────────────────
+
+describe("ThoughtLogRouter GET /log/:date/comments", () => {
+    let router: ThoughtLogRouter;
+    let service: IThoughtLogService;
+
+    beforeEach(() => {
+        service = makeService();
+        router = new ThoughtLogRouter(service);
+    });
+
+    it("returns 200 with comments array when issue is found", async () => {
+        const request = makeRequest({
+            getMethod: vi.fn().mockReturnValue("GET"),
+            getSubResource: vi.fn().mockReturnValue({ date: "2024-01-15", resource: "comments" }),
+        });
+        const response = await router.handle(request);
+        expect(response.statusCode).toBe(200);
+        const parsed = JSON.parse(response.body);
+        expect(parsed.comments).toEqual(["## 19:30\nhello\n", "## 20:00\nworld\n"]);
+    });
+
+    it("returns 404 when the daily issue does not exist", async () => {
+        service.getLogComments = vi.fn().mockResolvedValue({ kind: "not_found", date: "2024-01-15" });
+        const request = makeRequest({
+            getMethod: vi.fn().mockReturnValue("GET"),
+            getSubResource: vi.fn().mockReturnValue({ date: "2024-01-15", resource: "comments" }),
+        });
+        const response = await router.handle(request);
+        expect(response.statusCode).toBe(404);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "not_found" });
+    });
+
+    it("returns 500 when getLogComments throws", async () => {
+        service.getLogComments = vi.fn().mockRejectedValue(new Error("db error"));
+        const request = makeRequest({
+            getMethod: vi.fn().mockReturnValue("GET"),
+            getSubResource: vi.fn().mockReturnValue({ date: "2024-01-15", resource: "comments" }),
+        });
+        const response = await router.handle(request);
+        expect(response.statusCode).toBe(500);
+        expect(JSON.parse(response.body)).toMatchObject({ ok: false, error: "db error" });
     });
 });
 

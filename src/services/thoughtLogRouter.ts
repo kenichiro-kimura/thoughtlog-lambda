@@ -18,6 +18,28 @@ export class ThoughtLogRouter {
     async handle(request: IHttpRequest): Promise<HttpResponse> {
         const method = request.getMethod();
         const dateParam = request.getDateParam();
+        const subResource = request.getSubResource();
+
+        // GET /log/yyyy-mm-dd/body or GET /log/yyyy-mm-dd/comments
+        if (method === "GET" && subResource) {
+            try {
+                if (subResource.resource === "body") {
+                    const outcome = await this.service.getLogBody(subResource.date);
+                    if (outcome.kind === "not_found") {
+                        return jsonResponse(HTTP_STATUS.NOT_FOUND, { ok: false, error: "not_found", date: outcome.date });
+                    }
+                    return jsonResponse(HTTP_STATUS.OK, { body: outcome.body });
+                } else {
+                    const outcome = await this.service.getLogComments(subResource.date);
+                    if (outcome.kind === "not_found") {
+                        return jsonResponse(HTTP_STATUS.NOT_FOUND, { ok: false, error: "not_found", date: outcome.date });
+                    }
+                    return jsonResponse(HTTP_STATUS.OK, { comments: outcome.comments });
+                }
+            } catch (e) {
+                return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: e instanceof Error ? e.message : String(e) });
+            }
+        }
 
         // GET /log/yyyy-mm-dd
         if (method === "GET" && dateParam) {
@@ -26,7 +48,12 @@ export class ThoughtLogRouter {
                 if (outcome.kind === "not_found") {
                     return jsonResponse(HTTP_STATUS.NOT_FOUND, { ok: false, error: "not_found", date: outcome.date });
                 }
-                return { statusCode: HTTP_STATUS.OK, contentType: "text/plain; charset=utf-8", body: outcome.body };
+                return jsonResponse(HTTP_STATUS.OK, {
+                    id: outcome.id,
+                    date: outcome.date,
+                    title: outcome.title,
+                    links: outcome.links,
+                });
             } catch (e) {
                 return jsonResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, { ok: false, error: e instanceof Error ? e.message : String(e) });
             }

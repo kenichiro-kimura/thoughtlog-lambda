@@ -8,7 +8,7 @@ import type { GitHubIssue, GitHubComment } from "../types";
 
 // ── shared test doubles ────────────────────────────────────────────────────────
 
-const mockIssue: GitHubIssue = { number: 42, html_url: "https://github.com/owner/repo/issues/42", title: "2024-01-15" };
+const mockIssue: GitHubIssue = { number: 42, html_url: "https://github.com/owner/repo/issues/42", title: "2024-01-15", body: "# 2024-01-15\n\nSummary text." };
 const mockComment: GitHubComment = { id: 99, body: "## 19:30\nhello\n" };
 
 function makeAuth(token = "tok"): IAuthService {
@@ -211,12 +211,16 @@ describe("ThoughtLogService.createEntry", () => {
 // ── getLog ─────────────────────────────────────────────────────────────────────
 
 describe("ThoughtLogService.getLog", () => {
-    it("returns found outcome with concatenated comment bodies", async () => {
+    it("returns found outcome with id, date, title and links", async () => {
         const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config);
         const outcome = await service.getLog("2024-01-15");
         expect(outcome.kind).toBe("found");
         if (outcome.kind === "found") {
-            expect(outcome.body).toContain("hello");
+            expect(outcome.id).toBe("issue-id-42");
+            expect(outcome.date).toBe("2024-01-15");
+            expect(outcome.title).toBe("2024-01-15");
+            expect(outcome.links.body).toBe("/log/2024-01-15/body");
+            expect(outcome.links.comments).toBe("/log/2024-01-15/comments");
         }
     });
 
@@ -224,6 +228,72 @@ describe("ThoughtLogService.getLog", () => {
         const github = makeGitHub({ findDailyIssue: vi.fn().mockResolvedValue(null) });
         const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
         const outcome = await service.getLog("2024-01-15");
+        expect(outcome.kind).toBe("not_found");
+        if (outcome.kind === "not_found") {
+            expect(outcome.date).toBe("2024-01-15");
+        }
+    });
+});
+
+// ── getLogBody ─────────────────────────────────────────────────────────────────
+
+describe("ThoughtLogService.getLogBody", () => {
+    it("returns found outcome with the issue body", async () => {
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config);
+        const outcome = await service.getLogBody("2024-01-15");
+        expect(outcome.kind).toBe("found");
+        if (outcome.kind === "found") {
+            expect(outcome.body).toBe("# 2024-01-15\n\nSummary text.");
+        }
+    });
+
+    it("returns empty string when issue has no body", async () => {
+        const github = makeGitHub({ getIssue: vi.fn().mockResolvedValue({ ...mockIssue, body: undefined }) });
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
+        const outcome = await service.getLogBody("2024-01-15");
+        expect(outcome.kind).toBe("found");
+        if (outcome.kind === "found") {
+            expect(outcome.body).toBe("");
+        }
+    });
+
+    it("returns not_found outcome when no issue exists", async () => {
+        const github = makeGitHub({ findDailyIssue: vi.fn().mockResolvedValue(null) });
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
+        const outcome = await service.getLogBody("2024-01-15");
+        expect(outcome.kind).toBe("not_found");
+        if (outcome.kind === "not_found") {
+            expect(outcome.date).toBe("2024-01-15");
+        }
+    });
+});
+
+// ── getLogComments ─────────────────────────────────────────────────────────────
+
+describe("ThoughtLogService.getLogComments", () => {
+    it("returns found outcome with an array of comment bodies", async () => {
+        const service = new ThoughtLogService(makeAuth(), makeGitHub(), makeIdempotency(), config);
+        const outcome = await service.getLogComments("2024-01-15");
+        expect(outcome.kind).toBe("found");
+        if (outcome.kind === "found") {
+            expect(outcome.comments).toEqual(["## 19:30\nhello\n"]);
+        }
+    });
+
+    it("returns empty string for comments without a body", async () => {
+        const github = makeGitHub({ getIssueComments: vi.fn().mockResolvedValue([{ id: 1, body: undefined }]) });
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
+        const outcome = await service.getLogComments("2024-01-15");
+        expect(outcome.kind).toBe("found");
+        if (outcome.kind === "found") {
+            expect(outcome.comments).toEqual([""]);
+        }
+    });
+
+    it("returns not_found outcome when no issue exists", async () => {
+        const github = makeGitHub({ findDailyIssue: vi.fn().mockResolvedValue(null) });
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
+        const outcome = await service.getLogComments("2024-01-15");
         expect(outcome.kind).toBe("not_found");
         if (outcome.kind === "not_found") {
             expect(outcome.date).toBe("2024-01-15");
