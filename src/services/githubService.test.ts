@@ -189,3 +189,40 @@ describe("GitHubApiService.updateComment", () => {
         expect((opts as { method: string }).method).toBe("PATCH");
     });
 });
+
+// ── findIssueByTitlePrefix ─────────────────────────────────────────────────────
+
+describe("GitHubApiService.findIssueByTitlePrefix", () => {
+    it("returns the issue whose title starts with the given prefix", async () => {
+        const issue: GitHubIssue = { number: 2, html_url: "https://github.com/o/r/issues/2", title: "2024-01-15 日記まとめ" };
+        const http = makeHttp({ items: [issue] });
+        const svc = new GitHubApiService(http);
+        const result = await svc.findIssueByTitlePrefix({ owner, repo, titlePrefix: "2024-01-15 ", token });
+        expect(result).toEqual(issue);
+    });
+
+    it("returns null when no item title starts with the given prefix", async () => {
+        const issue: GitHubIssue = { number: 2, title: "2024-01-14 something" };
+        const http = makeHttp({ items: [issue] });
+        const svc = new GitHubApiService(http);
+        const result = await svc.findIssueByTitlePrefix({ owner, repo, titlePrefix: "2024-01-15 ", token });
+        expect(result).toBeNull();
+    });
+
+    it("returns null when search result has no items", async () => {
+        const http = makeHttp({});
+        const svc = new GitHubApiService(http);
+        const result = await svc.findIssueByTitlePrefix({ owner, repo, titlePrefix: "2024-01-15 ", token });
+        expect(result).toBeNull();
+    });
+
+    it("encodes the title prefix in the search query URL", async () => {
+        const http = makeHttp({ items: [] });
+        const svc = new GitHubApiService(http);
+        await svc.findIssueByTitlePrefix({ owner, repo, titlePrefix: "2024-01-15 ", token });
+        const [url] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect(url).toContain("search/issues");
+        expect(url).toContain(encodeURIComponent("2024-01-15 "));
+    });
+});
+

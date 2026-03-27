@@ -38,10 +38,10 @@ export class LambdaHttpRequest implements IHttpRequest {
         return match ? match[1] : null;
     }
 
-    getSubResource(): { date: string; resource: "body" | "comments" } | null {
-        const match = this.getRawPath().match(/\/log\/(\d{4}-\d{2}-\d{2})\/(body|comments)$/);
+    getSubResource(): { date: string; resource: "body" | "comments" | "summary" } | null {
+        const match = this.getRawPath().match(/\/log\/(\d{4}-\d{2}-\d{2})\/(body|comments|summary)$/);
         if (!match) return null;
-        return { date: match[1], resource: match[2] as "body" | "comments" };
+        return { date: match[1], resource: match[2] as "body" | "comments" | "summary" };
     }
 
     getPayload(): Payload {

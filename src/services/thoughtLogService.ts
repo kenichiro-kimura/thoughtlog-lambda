@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Payload, GitHubIssue, RepositoryConfig, CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, GetLogBodyOutcome, GetLogCommentsOutcome, UpdateLogOutcome, VoiceRefineMessage, FinalizeMessage, CreateEntryMessage } from "../types";
+import type { Payload, GitHubIssue, RepositoryConfig, CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, GetLogBodyOutcome, GetLogCommentsOutcome, GetLogSummaryOutcome, UpdateLogOutcome, VoiceRefineMessage, FinalizeMessage, CreateEntryMessage } from "../types";
 import { getDateKeyJst } from "../utils/date";
 import { parseLabels, formatEntry } from "../utils/format";
 import type { IAuthService } from "../interfaces/IAuthService";
@@ -9,7 +9,7 @@ import type { IThoughtLogService } from "../interfaces/IThoughtLogService";
 import type { IQueueService } from "../interfaces/IQueueService";
 
 export type { IThoughtLogService };
-export type { CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, GetLogBodyOutcome, GetLogCommentsOutcome, UpdateLogOutcome };
+export type { CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, GetLogBodyOutcome, GetLogCommentsOutcome, GetLogSummaryOutcome, UpdateLogOutcome };
 
 /**
  * Orchestrates ThoughtLog business logic.
@@ -157,6 +157,21 @@ export class ThoughtLogService implements IThoughtLogService {
 
         const comments = await this.github.getIssueComments({ owner, repo, issueNumber: issue.number, token });
         return { kind: "found", comments: comments.map((c) => c.body ?? "") };
+    }
+
+    async getLogSummary(dateKey: string): Promise<GetLogSummaryOutcome> {
+        const { owner, repo } = this.config;
+        const token = await this.auth.getInstallationToken();
+
+        const issue = await this.github.findIssueByTitlePrefix({ owner, repo, titlePrefix: `${dateKey} `, token });
+        if (!issue) return { kind: "not_found", date: dateKey };
+
+        const comments = await this.github.getIssueComments({ owner, repo, issueNumber: issue.number, token });
+        // GitHub returns comments in ascending order; the second newest is at index length-2.
+        const secondNewest = comments.length >= 2 ? comments[comments.length - 2] : null;
+        if (!secondNewest) return { kind: "not_found", date: dateKey };
+
+        return { kind: "found", summary: secondNewest.body ?? "" };
     }
 
     async updateLog(dateKey: string): Promise<UpdateLogOutcome> {

@@ -18,6 +18,7 @@ function makeAuth(token = "tok"): IAuthService {
 function makeGitHub(overrides: Partial<IGitHubService> = {}): IGitHubService {
     return {
         findDailyIssue: vi.fn().mockResolvedValue(mockIssue),
+        findIssueByTitlePrefix: vi.fn().mockResolvedValue({ ...mockIssue, title: "2024-01-15 Summary Issue" }),
         createDailyIssue: vi.fn().mockResolvedValue(mockIssue),
         addComment: vi.fn().mockResolvedValue(mockComment),
         updateIssue: vi.fn().mockResolvedValue(mockIssue),
@@ -385,3 +386,84 @@ describe("ThoughtLogService.enqueueEntry", () => {
     });
 });
 
+// ── getLogSummary ──────────────────────────────────────────────────────────────
+
+describe("ThoughtLogService.getLogSummary", () => {
+    const summaryIssue: GitHubIssue = { number: 43, html_url: "https://github.com/owner/repo/issues/43", title: "2024-01-15 日記まとめ" };
+    const comment1: GitHubComment = { id: 1, body: "## 19:30\nhello\n" };
+    const comment2: GitHubComment = { id: 2, body: "## 20:00\nworld\n" };
+    const comment3: GitHubComment = { id: 3, body: "## まとめ\nsummary text\n" };
+
+    it("returns the second newest comment as summary", async () => {
+        const github = makeGitHub({
+            findIssueByTitlePrefix: vi.fn().mockResolvedValue(summaryIssue),
+            getIssueComments: vi.fn().mockResolvedValue([comment1, comment2, comment3]),
+        });
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
+        const outcome = await service.getLogSummary("2024-01-15");
+        expect(outcome.kind).toBe("found");
+        if (outcome.kind === "found") {
+            expect(outcome.summary).toBe("## 20:00\nworld\n");
+        }
+    });
+
+    it("returns not_found when there is only one comment", async () => {
+        const github = makeGitHub({
+            findIssueByTitlePrefix: vi.fn().mockResolvedValue(summaryIssue),
+            getIssueComments: vi.fn().mockResolvedValue([comment1]),
+        });
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
+        const outcome = await service.getLogSummary("2024-01-15");
+        expect(outcome.kind).toBe("not_found");
+        if (outcome.kind === "not_found") {
+            expect(outcome.date).toBe("2024-01-15");
+        }
+    });
+
+    it("returns not_found when there are no comments", async () => {
+        const github = makeGitHub({
+            findIssueByTitlePrefix: vi.fn().mockResolvedValue(summaryIssue),
+            getIssueComments: vi.fn().mockResolvedValue([]),
+        });
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
+        const outcome = await service.getLogSummary("2024-01-15");
+        expect(outcome.kind).toBe("not_found");
+    });
+
+    it("returns not_found when no issue with matching title prefix exists", async () => {
+        const github = makeGitHub({
+            findIssueByTitlePrefix: vi.fn().mockResolvedValue(null),
+        });
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
+        const outcome = await service.getLogSummary("2024-01-15");
+        expect(outcome.kind).toBe("not_found");
+        if (outcome.kind === "not_found") {
+            expect(outcome.date).toBe("2024-01-15");
+        }
+    });
+
+    it("calls findIssueByTitlePrefix with dateKey followed by a space", async () => {
+        const github = makeGitHub({
+            findIssueByTitlePrefix: vi.fn().mockResolvedValue(summaryIssue),
+            getIssueComments: vi.fn().mockResolvedValue([comment1, comment2]),
+        });
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
+        await service.getLogSummary("2024-01-15");
+        expect(github.findIssueByTitlePrefix).toHaveBeenCalledWith(
+            expect.objectContaining({ titlePrefix: "2024-01-15 " }),
+        );
+    });
+
+    it("returns empty string for a comment without a body", async () => {
+        const github = makeGitHub({
+            findIssueByTitlePrefix: vi.fn().mockResolvedValue(summaryIssue),
+            getIssueComments: vi.fn().mockResolvedValue([{ id: 1, body: undefined }, comment2]),
+        });
+        const service = new ThoughtLogService(makeAuth(), github, makeIdempotency(), config);
+        const outcome = await service.getLogSummary("2024-01-15");
+        expect(outcome.kind).toBe("found");
+        if (outcome.kind === "found") {
+            expect(outcome.summary).toBe("");
+        }
+    });
+});

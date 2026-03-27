@@ -130,6 +130,11 @@ describe("LambdaHttpRequest.getSubResource", () => {
         expect(req.getSubResource()).toEqual({ date: "2024-01-15", resource: "comments" });
     });
 
+    it("extracts date and resource 'summary' from a /log/yyyy-mm-dd/summary path", () => {
+        const req = new LambdaHttpRequest(makeV2Event({ rawPath: "/log/2024-01-15/summary" }));
+        expect(req.getSubResource()).toEqual({ date: "2024-01-15", resource: "summary" });
+    });
+
     it("returns null when path matches /log/yyyy-mm-dd exactly", () => {
         const req = new LambdaHttpRequest(makeV2Event({ rawPath: "/log/2024-01-15" }));
         expect(req.getSubResource()).toBeNull();

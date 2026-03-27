@@ -20,7 +20,7 @@ export class ThoughtLogRouter {
         const dateParam = request.getDateParam();
         const subResource = request.getSubResource();
 
-        // GET /log/yyyy-mm-dd/body or GET /log/yyyy-mm-dd/comments
+        // GET /log/yyyy-mm-dd/body or GET /log/yyyy-mm-dd/comments or GET /log/yyyy-mm-dd/summary
         if (method === "GET" && subResource) {
             try {
                 if (subResource.resource === "body") {
@@ -29,6 +29,12 @@ export class ThoughtLogRouter {
                         return jsonResponse(HTTP_STATUS.NOT_FOUND, { ok: false, error: "not_found", date: outcome.date });
                     }
                     return jsonResponse(HTTP_STATUS.OK, { body: outcome.body });
+                } else if (subResource.resource === "summary") {
+                    const outcome = await this.service.getLogSummary(subResource.date);
+                    if (outcome.kind === "not_found") {
+                        return jsonResponse(HTTP_STATUS.NOT_FOUND, { ok: false, error: "not_found", date: outcome.date });
+                    }
+                    return jsonResponse(HTTP_STATUS.OK, { summary: outcome.summary });
                 } else {
                     const outcome = await this.service.getLogComments(subResource.date);
                     if (outcome.kind === "not_found") {
