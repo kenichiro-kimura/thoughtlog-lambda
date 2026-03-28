@@ -163,7 +163,7 @@ export class ThoughtLogService implements IThoughtLogService {
         const { owner, repo } = this.config;
         const token = await this.auth.getInstallationToken();
 
-        const issue = await this.github.findIssueByTitlePrefix({ owner, repo, titlePrefix: `${dateKey} `, token });
+        const issue = await this.github.findIssueByTitlePrefix?.({ owner, repo, titlePrefix: `${dateKey} `, token }) ?? null;
         if (!issue) return { kind: "not_found", date: dateKey };
 
         const comments = await this.github.getIssueComments({ owner, repo, issueNumber: issue.number, token });
