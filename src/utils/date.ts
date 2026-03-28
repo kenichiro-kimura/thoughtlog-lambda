@@ -29,9 +29,9 @@ export function nowJstDateTime(): string {
 export function getNightOwlThresholdHour(): number {
     const raw = process.env.NIGHT_OWL_THRESHOLD_HOURS;
     if (raw === undefined || raw === "") return 3;
-    const parsed = parseInt(raw, 10);
-    if (isNaN(parsed) || parsed < 0 || parsed > 12) return 3;
-    return parsed;
+    const numeric = Number(raw);
+    if (!Number.isInteger(numeric) || numeric < 0 || numeric > 12) return 3;
+    return numeric;
 }
 
 /**
