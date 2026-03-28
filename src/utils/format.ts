@@ -1,5 +1,5 @@
 import type { Payload } from "../types";
-import { JST_OFFSET_MS } from "./date";
+import { JST_OFFSET_MS, getNightOwlThresholdHour } from "./date";
 
 export function parseLabels(defaultLabelsCsv: string, payloadLabels: unknown): string[] {
     const base = (defaultLabelsCsv || "")
@@ -19,8 +19,12 @@ export function parseLabels(defaultLabelsCsv: string, payloadLabels: unknown): s
 export function formatEntry(payload: Payload): string {
     const captured = payload?.captured_at ? new Date(payload.captured_at) : new Date();
     const jst = new Date(captured.getTime() + JST_OFFSET_MS);
-    const hh = String(jst.getUTCHours()).padStart(2, "0");
+    const hour = jst.getUTCHours();
     const mi = String(jst.getUTCMinutes()).padStart(2, "0");
+
+    const threshold = getNightOwlThresholdHour();
+    const displayHour = hour < threshold ? hour + 24 : hour;
+    const hh = String(displayHour).padStart(2, "0");
 
     const raw = (payload?.raw ?? "").toString().trim();
     const kind = (payload?.kind ?? "").toString().trim();
