@@ -12,8 +12,14 @@ describe("nowEpoch", () => {
 });
 
 describe("getNightOwlThresholdHour", () => {
+    const originalNightOwlThresholdHours = process.env.NIGHT_OWL_THRESHOLD_HOURS;
+
     afterEach(() => {
-        delete process.env.NIGHT_OWL_THRESHOLD_HOURS;
+        if (originalNightOwlThresholdHours === undefined) {
+            delete process.env.NIGHT_OWL_THRESHOLD_HOURS;
+        } else {
+            process.env.NIGHT_OWL_THRESHOLD_HOURS = originalNightOwlThresholdHours;
+        }
     });
 
     it("returns 3 by default when env var is unset", () => {
@@ -47,8 +53,14 @@ describe("getNightOwlThresholdHour", () => {
 });
 
 describe("getDateKeyJst", () => {
+    const originalNightOwlThresholdHours = process.env.NIGHT_OWL_THRESHOLD_HOURS;
+
     afterEach(() => {
-        delete process.env.NIGHT_OWL_THRESHOLD_HOURS;
+        if (originalNightOwlThresholdHours === undefined) {
+            delete process.env.NIGHT_OWL_THRESHOLD_HOURS;
+        } else {
+            process.env.NIGHT_OWL_THRESHOLD_HOURS = originalNightOwlThresholdHours;
+        }
     });
 
     it("converts a UTC timestamp to a JST YYYY-MM-DD key", () => {

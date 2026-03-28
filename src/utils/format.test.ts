@@ -31,12 +31,22 @@ describe("parseLabels", () => {
 });
 
 describe("formatEntry", () => {
+    const originalNightOwlThresholdHours = process.env.NIGHT_OWL_THRESHOLD_HOURS;
+
     beforeEach(() => {
-        delete process.env.NIGHT_OWL_THRESHOLD_HOURS;
+        if (originalNightOwlThresholdHours === undefined) {
+            delete process.env.NIGHT_OWL_THRESHOLD_HOURS;
+        } else {
+            process.env.NIGHT_OWL_THRESHOLD_HOURS = originalNightOwlThresholdHours;
+        }
     });
 
     afterEach(() => {
-        delete process.env.NIGHT_OWL_THRESHOLD_HOURS;
+        if (originalNightOwlThresholdHours === undefined) {
+            delete process.env.NIGHT_OWL_THRESHOLD_HOURS;
+        } else {
+            process.env.NIGHT_OWL_THRESHOLD_HOURS = originalNightOwlThresholdHours;
+        }
     });
 
     it("formats entry with kind prefix", () => {
