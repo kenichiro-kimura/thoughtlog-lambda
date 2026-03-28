@@ -2,6 +2,7 @@ import type { GitHubIssue, GitHubComment } from "../types";
 
 export interface IGitHubService {
     findDailyIssue(params: { owner: string; repo: string; dateKey: string; labels: string[]; token: string }): Promise<GitHubIssue | null>;
+    findIssueByTitlePrefix?(params: { owner: string; repo: string; titlePrefix: string; token: string }): Promise<GitHubIssue | null>;
     createDailyIssue(params: { owner: string; repo: string; dateKey: string; labels: string[]; token: string }): Promise<GitHubIssue>;
     addComment(params: { owner: string; repo: string; issueNumber: number; commentBody: string; token: string }): Promise<GitHubComment>;
     updateIssue(params: { owner: string; repo: string; issueNumber: number; title?: string; body: string; token: string }): Promise<GitHubIssue>;

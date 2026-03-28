@@ -69,6 +69,10 @@ export type GetLogCommentsOutcome =
     | { kind: "found"; comments: string[] }
     | { kind: "not_found"; date: string };
 
+export type GetLogSummaryOutcome =
+    | { kind: "found"; summary: string }
+    | { kind: "not_found"; date: string };
+
 export type UpdateLogOutcome =
     | { kind: "queued"; date: string };
 

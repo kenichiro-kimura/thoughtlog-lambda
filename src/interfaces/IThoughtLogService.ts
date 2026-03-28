@@ -1,4 +1,4 @@
-import type { Payload, CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, GetLogBodyOutcome, GetLogCommentsOutcome, UpdateLogOutcome } from "../types";
+import type { Payload, CreateEntryOutcome, EnqueueEntryOutcome, GetLogOutcome, GetLogBodyOutcome, GetLogCommentsOutcome, GetLogSummaryOutcome, UpdateLogOutcome } from "../types";
 
 export interface IThoughtLogService {
     createEntry(payload: Payload): Promise<CreateEntryOutcome>;
@@ -6,5 +6,6 @@ export interface IThoughtLogService {
     getLog(dateKey: string): Promise<GetLogOutcome>;
     getLogBody(dateKey: string): Promise<GetLogBodyOutcome>;
     getLogComments(dateKey: string): Promise<GetLogCommentsOutcome>;
+    getLogSummary(dateKey: string): Promise<GetLogSummaryOutcome>;
     updateLog(dateKey: string): Promise<UpdateLogOutcome>;
 }

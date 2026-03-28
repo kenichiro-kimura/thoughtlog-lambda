@@ -11,11 +11,11 @@ export interface IHttpRequest {
      */
     getDateParam(): string | null;
     /**
-     * Extracts the date and sub-resource from paths matching /log/yyyy-mm-dd/body
-     * or /log/yyyy-mm-dd/comments.
+     * Extracts the date and sub-resource from paths matching /log/yyyy-mm-dd/body,
+     * /log/yyyy-mm-dd/comments, or /log/yyyy-mm-dd/summary.
      * Returns null when the path does not match.
      */
-    getSubResource(): { date: string; resource: "body" | "comments" } | null;
+    getSubResource(): { date: string; resource: "body" | "comments" | "summary" } | null;
     /**
      * Parses and returns the request body as a Payload object.
      * Returns an empty Payload when there is no body.

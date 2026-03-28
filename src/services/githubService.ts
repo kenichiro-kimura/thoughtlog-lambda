@@ -28,6 +28,22 @@ export class GitHubApiService implements IGitHubService {
         return exact ?? null;
     }
 
+    async findIssueByTitlePrefix({ owner, repo, titlePrefix, token }: { owner: string; repo: string; titlePrefix: string; token: string }): Promise<GitHubIssue | null> {
+        const q = [
+            `repo:${owner}/${repo}`,
+            `is:issue`,
+            `in:title`,
+            `"${titlePrefix}"`,
+        ].join(" ");
+
+        const url = `https://api.github.com/search/issues?q=${encodeURIComponent(q)}&sort=updated&order=desc&per_page=5`;
+        const result = await this.httpClient(url, { token }) as GitHubSearchResult;
+
+        const items = result?.items ?? [];
+        const match = items.find((it) => (it.title || "").startsWith(titlePrefix));
+        return match ?? null;
+    }
+
     async createDailyIssue({ owner, repo, dateKey, labels, token }: { owner: string; repo: string; dateKey: string; labels: string[]; token: string }): Promise<GitHubIssue> {
         const body = `# ${dateKey}\n\n<!-- summary will be generated later -->\n`;
         return await this.httpClient(`https://api.github.com/repos/${owner}/${repo}/issues`, {
