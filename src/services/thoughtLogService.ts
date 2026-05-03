@@ -60,7 +60,7 @@ export class ThoughtLogService implements IThoughtLogService {
                 if (found) {
                     issue = found.html_url ? found : await this.github.getIssue({ owner, repo, issueNumber: found.number, token });
                 } else {
-                    issue = await this.github.createDailyIssue({ owner, repo, dateKey, labels, token });
+                    issue = await this.github.createDailyIssue({ owner, repo, dateKey, labels, assignee: this.config.assignee ?? owner, token });
                 }
                 await this.idempotency.putIssueTitleCache(dateKey, issue.number);
             }

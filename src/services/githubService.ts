@@ -44,12 +44,12 @@ export class GitHubApiService implements IGitHubService {
         return match ?? null;
     }
 
-    async createDailyIssue({ owner, repo, dateKey, labels, token }: { owner: string; repo: string; dateKey: string; labels: string[]; token: string }): Promise<GitHubIssue> {
+    async createDailyIssue({ owner, repo, dateKey, labels, assignee, token }: { owner: string; repo: string; dateKey: string; labels: string[]; assignee: string; token: string }): Promise<GitHubIssue> {
         const body = `# ${dateKey}\n\n<!-- summary will be generated later -->\n`;
         return await this.httpClient(`https://api.github.com/repos/${owner}/${repo}/issues`, {
             method: "POST",
             token,
-            body: { title: dateKey, body, labels },
+            body: { title: dateKey, body, labels, assignees: [assignee] },
         }) as GitHubIssue;
     }
 

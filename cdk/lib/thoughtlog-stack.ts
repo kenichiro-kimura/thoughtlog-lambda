@@ -85,6 +85,9 @@ export class ThoughtlogStack extends cdk.Stack {
       ...(this.node.tryGetContext('defaultLabels')
         ? { DEFAULT_LABELS: this.node.tryGetContext('defaultLabels') as string }
         : {}),
+      ...(this.node.tryGetContext('githubAssignee')
+        ? { GITHUB_ASSIGNEE: this.node.tryGetContext('githubAssignee') as string }
+        : {}),
     };
 
     // HTTP-triggered Lambda function

@@ -47,6 +47,7 @@ export interface ContainerEnv extends RepositoryConfig {
     openAiModel: string | undefined;
     openAiSystemPrompt: string | undefined;
     voiceQueueUrl: string | undefined;
+    githubAssignee: string | undefined;
 }
 
 /**
@@ -75,6 +76,7 @@ export function createThoughtLogService(env: ContainerEnv): ThoughtLogService {
         owner: env.owner,
         repo: env.repo,
         defaultLabels: env.defaultLabels,
+        assignee: env.githubAssignee,
     }, queueService, queueService);
 }
 
