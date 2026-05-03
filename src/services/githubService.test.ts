@@ -44,11 +44,20 @@ describe("GitHubApiService.createDailyIssue", () => {
         const issue: GitHubIssue = { number: 7, html_url: "https://github.com/o/r/issues/7", title: "2024-06-01" };
         const http = makeHttp(issue);
         const svc = new GitHubApiService(http);
-        const result = await svc.createDailyIssue({ owner, repo, dateKey: "2024-06-01", labels: ["thoughtlog"], token });
+        const result = await svc.createDailyIssue({ owner, repo, dateKey: "2024-06-01", labels: ["thoughtlog"], assignee: "user1", token });
         expect(result).toEqual(issue);
         const [url, opts] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
         expect(url).toContain(`/repos/${owner}/${repo}/issues`);
         expect((opts as { body: { title: string } }).body.title).toBe("2024-06-01");
+    });
+
+    it("includes assignees in the request body", async () => {
+        const issue: GitHubIssue = { number: 7, html_url: "https://github.com/o/r/issues/7", title: "2024-06-01" };
+        const http = makeHttp(issue);
+        const svc = new GitHubApiService(http);
+        await svc.createDailyIssue({ owner, repo, dateKey: "2024-06-01", labels: ["thoughtlog"], assignee: "user1", token });
+        const [, opts] = (http as ReturnType<typeof vi.fn>).mock.calls[0];
+        expect((opts as { body: { assignees: string[] } }).body.assignees).toEqual(["user1"]);
     });
 });
 

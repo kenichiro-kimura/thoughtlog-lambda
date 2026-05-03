@@ -81,6 +81,8 @@ export interface RepositoryConfig {
     owner: string;
     repo: string;
     defaultLabels: string;
+    /** GitHub username to assign to newly created issues. Defaults to the repository owner when not specified. */
+    assignee?: string;
 }
 
 /** Message payload sent to the queue for async voice comment refinement. */

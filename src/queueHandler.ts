@@ -42,6 +42,7 @@ const thoughtLog = createThoughtLogService({
     idempotencyTable: process.env.IDEMPOTENCY_TABLE,
     idempotencyTtlDays: undefined,
     voiceQueueUrl: process.env.VOICE_QUEUE_URL,
+    githubAssignee: process.env.GITHUB_ASSIGNEE,
 });
 
 export const handler = async (event: SQSEvent): Promise<void> => {

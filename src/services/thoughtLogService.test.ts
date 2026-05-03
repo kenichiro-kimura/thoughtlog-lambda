@@ -94,6 +94,21 @@ describe("ThoughtLogService.createEntry", () => {
         expect(github.createDailyIssue).toHaveBeenCalledOnce();
     });
 
+    it("uses owner as assignee when config has no assignee", async () => {
+        (github.findDailyIssue as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+        await service.createEntry({ request_id: "req-assignee-default", raw: "new", captured_at: "2024-01-15T10:30:00Z" });
+        const call = (github.createDailyIssue as ReturnType<typeof vi.fn>).mock.calls[0][0];
+        expect(call.assignee).toBe(config.owner);
+    });
+
+    it("uses configured assignee when specified in config", async () => {
+        (github.findDailyIssue as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+        const svc = new ThoughtLogService(makeAuth(), github, idempotency, { ...config, assignee: "assigneduser" });
+        await svc.createEntry({ request_id: "req-assignee-custom", raw: "new", captured_at: "2024-01-15T10:30:00Z" });
+        const call = (github.createDailyIssue as ReturnType<typeof vi.fn>).mock.calls[0][0];
+        expect(call.assignee).toBe("assigneduser");
+    });
+
     it("uses cached issue number from DynamoDB when available, skipping GitHub search", async () => {
         (idempotency.getIssueNumberByTitle as ReturnType<typeof vi.fn>).mockResolvedValue(42);
         const outcome = await service.createEntry({ request_id: "req-cached", raw: "hello", captured_at: "2024-01-15T10:30:00Z" });
